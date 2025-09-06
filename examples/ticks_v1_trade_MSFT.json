@@ -1,0 +1,25 @@
+{
+  "topic": "ampy.prod.ticks.v1.trade.MSFT",
+  "headers": {
+    "message_id": "0d646c4e-e37d-4d1f-8784-ea88efe789ca",
+    "schema_fqdn": "ampy.ticks.v1.TradeTick",
+    "schema_version": "1.0.0",
+    "content_type": "application/x-protobuf",
+    "produced_at": "2025-09-06T19:31:01Z",
+    "producer": "databento-cpp@tick-ingest-3",
+    "source": "databento-cpp",
+    "run_id": "example_run",
+    "trace_id": "2d8e5e125d5d4cfa937fe44c0bba5744",
+    "partition_key": "MSFT.XNAS"
+  },
+  "payload_json": {
+    "_message": "ampy.ticks.v1.TradeTick",
+    "symbol": "MSFT",
+    "mic": "XNAS",
+    "event_time": "2025-09-05T19:30:12.462Z",
+    "price": 345.67,
+    "size": 200,
+    "trade_id": "db-5a93e"
+  },
+  "notes": "Trade tick example; transport guarantees order within (symbol, mic)."
+}

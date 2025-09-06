@@ -1,0 +1,28 @@
+{
+  "topic": "ampy.prod.news.v1.raw",
+  "headers": {
+    "message_id": "998f86bc-d67d-4600-acc2-6d8220f5585c",
+    "schema_fqdn": "ampy.news.v1.NewsItem",
+    "schema_version": "1.0.0",
+    "content_type": "application/x-protobuf",
+    "produced_at": "2025-09-06T19:31:01Z",
+    "producer": "marketbeat-go@news-2",
+    "source": "marketbeat-go",
+    "run_id": "example_run",
+    "trace_id": "3ace658e79454b0e862a4961f195f103",
+    "partition_key": "marketbeat:2025-09-05:amzn-headline-8b12c6",
+    "dedupe_key": "marketbeat:2025-09-05:amzn-headline-8b12c6"
+  },
+  "payload_json": {
+    "_message": "ampy.news.v1.NewsItem",
+    "id": "marketbeat:2025-09-05:amzn-headline-8b12c6",
+    "published_at": "2025-09-05T13:05:15Z",
+    "headline": "AMZN unveils new fulfillment AI",
+    "tickers": [
+      "AMZN"
+    ],
+    "body": "Amazon announced...",
+    "sentiment_score_bp": 240
+  },
+  "notes": "Dedupe by payload id; key is the same id."
+}

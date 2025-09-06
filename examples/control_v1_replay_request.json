@@ -1,0 +1,25 @@
+{
+  "topic": "ampy.prod.control.v1.replay_requests",
+  "headers": {
+    "message_id": "804dcc01-083b-4a6a-a842-323b2fd12ed3",
+    "schema_fqdn": "ampy.control.v1.ReplayRequest",
+    "schema_version": "1.0.0",
+    "content_type": "application/x-protobuf",
+    "produced_at": "2025-09-06T19:31:01Z",
+    "producer": "ops-tooling@cli-1",
+    "source": "ops-tooling",
+    "run_id": "example_run",
+    "trace_id": "1a5a0fea9751489697d6f79ad2bddbe2",
+    "partition_key": "bars|XNAS.AAPL"
+  },
+  "payload_json": {
+    "_message": "ampy.control.v1.ReplayRequest",
+    "domain": "bars",
+    "version": "v1",
+    "subtopic": "XNAS.AAPL",
+    "start": "2025-09-05T19:00:00Z",
+    "end": "2025-09-05T20:00:00Z",
+    "reason": "backfill-gap-check"
+  },
+  "notes": "Operators request time-window replays via a control topic; consumers reprocess idempotently."
+}

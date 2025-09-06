@@ -1,0 +1,26 @@
+{
+  "topic": "ampy.prod.metrics.v1.ampy-oms",
+  "headers": {
+    "message_id": "3dd26710-6fd0-42d2-8f31-78be424721e3",
+    "schema_fqdn": "ampy.metrics.v1.Metric",
+    "schema_version": "1.0.0",
+    "content_type": "application/x-protobuf",
+    "produced_at": "2025-09-06T19:31:01Z",
+    "producer": "ampy-oms@oms-2",
+    "source": "ampy-oms",
+    "run_id": "example_run",
+    "trace_id": "bda1a26aff98401788b66aab4a1b30ca",
+    "partition_key": "ampy-oms|oms.order_rejects"
+  },
+  "payload_json": {
+    "_message": "ampy.metrics.v1.Metric",
+    "name": "oms.order_rejects",
+    "labels": {
+      "broker": "alpaca",
+      "env": "prod",
+      "reason": "risk_check"
+    },
+    "value": 1
+  },
+  "notes": "Metrics are low-frequency; use counters/gauges; avoid sensitive data."
+}

@@ -1,0 +1,18 @@
+{
+  "topic": "ampy.prod.dlq.v1.bars",
+  "headers": {
+    "message_id": "142d8c3f-aaab-4958-8a43-d4841e72f1b1",
+    "schema_fqdn": "ampy.bars.v1.BarBatch",
+    "schema_version": "1.0.0",
+    "content_type": "application/x-protobuf",
+    "produced_at": "2025-09-06T19:31:01Z",
+    "producer": "bus-router@plane-1",
+    "source": "ampy-bus",
+    "run_id": "example_run",
+    "trace_id": "eca212bc50b54133bb97b2206cc123d3",
+    "partition_key": "XNAS.AAPL",
+    "dlq_reason": "decode_error: invalid decimal scale"
+  },
+  "payload_json": null,
+  "notes": "DLQ contains original headers and payload bytes (not included here). Access-controlled; include content hash where possible."
+}

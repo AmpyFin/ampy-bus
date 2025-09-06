@@ -1,0 +1,25 @@
+{
+  "topic": "ampy.prod.fx.v1.rates",
+  "headers": {
+    "message_id": "0c4c3845-d9ff-4906-966c-85d9cfc5af9c",
+    "schema_fqdn": "ampy.fx.v1.FxRate",
+    "schema_version": "1.0.0",
+    "content_type": "application/x-protobuf",
+    "produced_at": "2025-09-06T19:31:01Z",
+    "producer": "fxrates-go@fx-1",
+    "source": "fxrates-go",
+    "run_id": "example_run",
+    "trace_id": "58f3e4f9edb04a79846028bb973843aa",
+    "partition_key": "USD.JPY"
+  },
+  "payload_json": {
+    "_message": "ampy.fx.v1.FxRate",
+    "base": "USD",
+    "quote": "JPY",
+    "as_of": "2025-09-05T19:30:00Z",
+    "bid": 147.123,
+    "ask": 147.137,
+    "mid": 147.13
+  },
+  "notes": "Snapshot semantics; latest per (base, quote) wins."
+}

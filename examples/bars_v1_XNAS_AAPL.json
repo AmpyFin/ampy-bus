@@ -1,0 +1,41 @@
+{
+  "topic": "ampy.prod.bars.v1.XNAS.AAPL",
+  "headers": {
+    "message_id": "412f21f0-56ce-42f1-a479-162cb36871a1",
+    "schema_fqdn": "ampy.bars.v1.BarBatch",
+    "schema_version": "1.0.0",
+    "content_type": "application/x-protobuf",
+    "produced_at": "2025-09-06T19:31:01Z",
+    "producer": "yfinance-go@ingest-1",
+    "source": "yfinance-go",
+    "run_id": "example_run",
+    "trace_id": "781164436920468d96a070bb311929e9",
+    "partition_key": "XNAS.AAPL"
+  },
+  "payload_json": {
+    "_message": "ampy.bars.v1.BarBatch",
+    "symbol": "AAPL",
+    "mic": "XNAS",
+    "adjusted": true,
+    "interval": "1m",
+    "records": [
+      {
+        "event_time": "2025-09-05T19:30:00Z",
+        "open": 192.05,
+        "high": 192.22,
+        "low": 191.98,
+        "close": 192.1,
+        "volume": 128734
+      },
+      {
+        "event_time": "2025-09-05T19:31:00Z",
+        "open": 192.1,
+        "high": 192.3,
+        "low": 192.02,
+        "close": 192.22,
+        "volume": 142001
+      }
+    ]
+  },
+  "notes": "Illustrative payload structure; consult ampy-proto for canonical fields."
+}

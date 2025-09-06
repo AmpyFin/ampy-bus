@@ -1,0 +1,105 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AmpyBusEnvelope",
+  "type": "object",
+  "required": [
+    "topic",
+    "headers"
+  ],
+  "properties": {
+    "topic": {
+      "type": "string"
+    },
+    "headers": {
+      "type": "object",
+      "required": [
+        "message_id",
+        "schema_fqdn",
+        "schema_version",
+        "content_type",
+        "produced_at",
+        "producer",
+        "source",
+        "run_id",
+        "trace_id",
+        "partition_key"
+      ],
+      "properties": {
+        "message_id": {
+          "type": "string"
+        },
+        "schema_fqdn": {
+          "type": "string"
+        },
+        "schema_version": {
+          "type": "string"
+        },
+        "content_type": {
+          "type": "string",
+          "enum": [
+            "application/x-protobuf",
+            "application/json"
+          ]
+        },
+        "content_encoding": {
+          "type": "string"
+        },
+        "produced_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "producer": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "trace_id": {
+          "type": "string"
+        },
+        "span_id": {
+          "type": "string"
+        },
+        "partition_key": {
+          "type": "string"
+        },
+        "dedupe_key": {
+          "type": "string"
+        },
+        "retry_count": {
+          "type": "integer"
+        },
+        "dlq_reason": {
+          "type": "string"
+        },
+        "schema_hash": {
+          "type": "string"
+        },
+        "blob_ref": {
+          "type": "string"
+        },
+        "blob_hash": {
+          "type": "string"
+        },
+        "blob_size": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "payload_json": {
+      "description": "Illustrative JSON mapping of the protobuf payload for human inspection only. The protobuf wire bytes are authoritative.",
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

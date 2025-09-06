@@ -1,0 +1,26 @@
+{
+  "topic": "ampy.prod.signals.v1.hyper@2025-09-05",
+  "headers": {
+    "message_id": "b07c3d8c-7f58-4f91-87cc-0dcdc51d2568",
+    "schema_fqdn": "ampy.signals.v1.Signal",
+    "schema_version": "1.0.0",
+    "content_type": "application/x-protobuf",
+    "produced_at": "2025-09-06T19:31:01Z",
+    "producer": "ampy-model-server@mdl-1",
+    "source": "ampy-model-server",
+    "run_id": "example_run",
+    "trace_id": "858aed69bc0044ce989a3bc477695fc1",
+    "partition_key": "hyper@2025-09-05|NVDA.XNAS"
+  },
+  "payload_json": {
+    "_message": "ampy.signals.v1.Signal",
+    "model_id": "hyper@2025-09-05",
+    "symbol": "NVDA",
+    "mic": "XNAS",
+    "signal_type": "ALPHA",
+    "score": -0.345,
+    "horizon": "5d",
+    "expires_at": "2025-09-12T19:31:03Z"
+  },
+  "notes": "Latest valid signal before expires_at applies; deterministic per (model_id, symbol, mic, horizon)."
+}

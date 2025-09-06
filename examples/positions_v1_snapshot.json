@@ -1,0 +1,27 @@
+{
+  "topic": "ampy.prod.positions.v1.snapshots",
+  "headers": {
+    "message_id": "b82630c4-3f81-4d4d-875b-3893af6bd957",
+    "schema_fqdn": "ampy.positions.v1.Position",
+    "schema_version": "1.0.0",
+    "content_type": "application/x-protobuf",
+    "produced_at": "2025-09-06T19:31:01Z",
+    "producer": "ampy-position-pnl@pnl-1",
+    "source": "ampy-position-pnl",
+    "run_id": "example_run",
+    "trace_id": "39e852d639704d698ff692ab7b0c87d5",
+    "partition_key": "ALPACA-LIVE-01|AAPL.XNAS"
+  },
+  "payload_json": {
+    "_message": "ampy.positions.v1.Position",
+    "account_id": "ALPACA-LIVE-01",
+    "symbol": "AAPL",
+    "mic": "XNAS",
+    "as_of": "2025-09-05T19:35:00Z",
+    "quantity": 5,
+    "avg_price": 191.99,
+    "unrealized_pnl": 12.5,
+    "realized_pnl": 0.0
+  },
+  "notes": "Monotonic as_of required per (account_id, symbol, mic)."
+}

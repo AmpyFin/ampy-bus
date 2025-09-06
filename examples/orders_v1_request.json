@@ -1,0 +1,29 @@
+{
+  "topic": "ampy.prod.orders.v1.requests",
+  "headers": {
+    "message_id": "e67035e7-8eae-4c16-90fa-26399074159b",
+    "schema_fqdn": "ampy.orders.v1.OrderRequest",
+    "schema_version": "1.0.0",
+    "content_type": "application/x-protobuf",
+    "produced_at": "2025-09-06T19:31:01Z",
+    "producer": "ampy-oms@oms-2",
+    "source": "ampy-oms",
+    "run_id": "example_run",
+    "trace_id": "0857e828a2704e219a5c162e33b05ca8",
+    "partition_key": "co_20250905_001",
+    "dedupe_key": "co_20250905_001"
+  },
+  "payload_json": {
+    "_message": "ampy.orders.v1.OrderRequest",
+    "account_id": "ALPACA-LIVE-01",
+    "client_order_id": "co_20250905_001",
+    "symbol": "AAPL",
+    "mic": "XNAS",
+    "side": "BUY",
+    "ord_type": "LIMIT",
+    "limit_price": 191.99,
+    "qty": 10,
+    "time_in_force": "DAY"
+  },
+  "notes": "Strict causal ordering required for submit \u2192 amend/cancel per client_order_id."
+}

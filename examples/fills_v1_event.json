@@ -1,0 +1,27 @@
+{
+  "topic": "ampy.prod.fills.v1.events",
+  "headers": {
+    "message_id": "ec6d5409-6f06-47fb-be01-4fcb92bb9cff",
+    "schema_fqdn": "ampy.fills.v1.Fill",
+    "schema_version": "1.0.0",
+    "content_type": "application/x-protobuf",
+    "produced_at": "2025-09-06T19:31:01Z",
+    "producer": "broker-alpaca@alp-1",
+    "source": "broker-alpaca",
+    "run_id": "example_run",
+    "trace_id": "b0fa94774d0744ce845cab78acfcf9c3",
+    "partition_key": "ALPACA-LIVE-01|co_20250905_001"
+  },
+  "payload_json": {
+    "_message": "ampy.fills.v1.Fill",
+    "account_id": "ALPACA-LIVE-01",
+    "client_order_id": "co_20250905_001",
+    "fill_id": "alp-ff12aa",
+    "event_time": "2025-09-05T19:31:06Z",
+    "price": 191.99,
+    "qty": 5,
+    "venue": "ALPACA",
+    "partial": true
+  },
+  "notes": "Fills may arrive out-of-order; consumers must accumulate by (account_id, client_order_id)."
+}
