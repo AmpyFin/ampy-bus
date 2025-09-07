@@ -52,18 +52,39 @@ jobs:
         shell: bash
         run: |
           docker run -d --name nats -p 4222:4222 nats:2.10 -- -js
-          for i in {1..30}; do (echo > /dev/tcp/127.0.0.1/4222) >/dev/null 2>&1 && echo "NATS ready" && break; sleep 1; done
+          # Wait for NATS to be fully ready
+          python3 -c "
+          import socket
+          import time
+          import sys
+          for i in range(60):
+              try:
+                  sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                  sock.settimeout(1)
+                  result = sock.connect_ex(('127.0.0.1', 4222))
+                  sock.close()
+                  if result == 0:
+                      # Port is open, wait a bit more for NATS to be ready
+                      time.sleep(2)
+                      print('NATS ready')
+                      sys.exit(0)
+              except:
+                  pass
+              time.sleep(1)
+          print('NATS failed to start')
+          sys.exit(1)
+          "
 
       - name: NATS publish (ampybusctl)
         run: |
-          ./ampybusctl pub-empty \
+          timeout 30s ./ampybusctl pub-empty \
             --topic ampy.prod.bars.v1.XNAS.AAPL \
             --producer ci@runner --source ci --pk XNAS.AAPL \
             --nats nats://127.0.0.1:4222
 
       - name: NATS consume once (Python)
         run: |
-          python3 python/examples/py_nats_sub.py \
+          timeout 30s python3 python/examples/py_nats_sub.py \
             --subject "ampy.prod.bars.v1.>" \
             --durable "ci-sub" \
             --exit-after 1 --timeout-sec 10 \
