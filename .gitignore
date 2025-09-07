@@ -71,3 +71,14 @@ htmlcov/
 # Temporary files
 *.tmp
 *.temp
+
+# TLS certificates and keys
+*.pem
+*.key
+*.crt
+*.cert
+ca.pem
+server-cert.pem
+server-key.pem
+client-cert.pem
+client-key.pem

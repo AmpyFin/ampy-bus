@@ -10,3 +10,4 @@ from .envelope import (
     pk_bars, pk_ticks, pk_news_id, pk_fx, pk_signals,
     pk_orders, pk_fills, pk_positions, pk_metrics,
 )
+from .schemahash import expected_schema_hash, verify_schema_hash
