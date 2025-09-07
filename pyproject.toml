@@ -6,10 +6,16 @@ readme = "README.md"
 requires-python = ">=3.8"
 license = { file = "LICENSE" }
 authors = [{ name = "AmpyFin" }]
-keywords = ["trading", "messaging", "nats", "kafka", "protobuf", "mlops", "ampyfin"]
+keywords = [
+  "trading", "messaging", "nats", "kafka", "protobuf", "fintech", "trading-systems",
+  "message-queue", "event-streaming", "observability", "ampyfin", "transport-agnostic",
+  "qos", "replay", "schema-validation", "distributed-systems", "mlops", "real-time",
+  "market-data", "order-management", "risk-management", "backtesting", "quantitative-finance"
+]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
+  "Intended Audience :: Financial and Insurance Industry",
   "License :: OSI Approved :: Apache Software License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
@@ -18,8 +24,20 @@ classifiers = [
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
-  "Topic :: Software Development :: Libraries",
-  "Topic :: System :: Distributed Computing"
+  "Topic :: Office/Business :: Financial :: Investment",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Topic :: System :: Distributed Computing",
+  "Topic :: System :: Networking",
+  "Topic :: Communications",
+  "Topic :: Scientific/Engineering :: Information Analysis",
+  "Topic :: Database :: Database Engines/Servers",
+  "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+  "Topic :: Software Development :: Libraries :: Application Frameworks",
+  "Topic :: System :: Clustering",
+  "Topic :: System :: Monitoring",
+  "Topic :: System :: Systems Administration",
+  "Topic :: Text Processing :: Markup :: XML",
+  "Topic :: Utilities"
 ]
 dependencies = [
   "protobuf>=4.25.0",
