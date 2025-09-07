@@ -17,7 +17,7 @@ jobs:
           - 4222:4222
         # Enable JetStream
         options: >-
-          -js
+          -- -js
           --health-cmd="bash -c 'echo > /dev/tcp/127.0.0.1/4222'"
           --health-interval=5s
           --health-timeout=5s
@@ -48,16 +48,32 @@ jobs:
 
       - name: Wait for NATS
         run: |
-          for i in {1..30}; do
-            nc -z 127.0.0.1 4222 && echo "NATS is up" && exit 0
-            sleep 1
-          done
-          echo "NATS failed to start"; exit 1
+          python3 -c "
+          import socket
+          import time
+          import sys
+          for i in range(60):
+              try:
+                  sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                  sock.settimeout(1)
+                  result = sock.connect_ex(('127.0.0.1', 4222))
+                  sock.close()
+                  if result == 0:
+                      # Port is open, wait a bit more for NATS to be ready
+                      time.sleep(2)
+                      print('NATS is up')
+                      sys.exit(0)
+              except:
+                  pass
+              time.sleep(1)
+          print('NATS failed to start')
+          sys.exit(1)
+          "
 
       - name: Ensure stream via CLI
         run: |
           # a publish call will auto-create stream AMPY with subjects ampy.>
-          ./ampybusctl pub-empty \
+          timeout 30s ./ampybusctl pub-empty \
             --topic ampy.prod.bars.v1.XNAS.AAPL \
             --producer ci@go --source go --pk XNAS.AAPL \
             --nats nats://127.0.0.1:4222
