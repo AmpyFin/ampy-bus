@@ -11,3 +11,7 @@ from .envelope import (
     pk_orders, pk_fills, pk_positions, pk_metrics,
 )
 from .schemahash import expected_schema_hash, verify_schema_hash
+from .headers import Headers, new_headers
+from .schemahash import expected_schema_hash, verify_schema_hash
+from .codec import encode_protobuf, decode_payload, DEFAULT_COMPRESS_THRESHOLD
+from .trace import make_traceparent

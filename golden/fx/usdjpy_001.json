@@ -1,0 +1,14 @@
+{
+    "topic": "ampy.prod.fx.v1.USD.JPY",
+    "headers": {
+      "schema_fqdn": "ampy.fx.v1.FxRate",
+      "schema_version": "1.0.0",
+      "producer": "fxrates-go@fx-1",
+      "source": "fxrates-go",
+      "produced_at": "2025-09-06T19:30:00Z",
+      "partition_key": "USD.JPY",
+      "content_type": "application/x-protobuf"
+    },
+    "payload_b64": ""
+  }
+  

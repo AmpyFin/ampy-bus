@@ -1,0 +1,18 @@
+{
+    "topic": "ampy.prod.bars.v1.XNAS.AAPL",
+    "headers": {
+      "schema_fqdn": "ampy.bars.v1.BarBatch",
+      "schema_version": "1.0.0",
+      "content_type": "application/x-protobuf",
+      "produced_at": "2025-09-06T19:31:01Z",
+      "producer": "fixture@cli",
+      "source": "golden-fixture",
+      "run_id": "golden_demo",
+      "trace_id": "4b5b3f2a0f9d4e3db4c8a1f0e3a7c812",
+      "partition_key": "XNAS.AAPL",
+      "message_id": "018f5e2f-9b1c-76aa-8f7a-3b1d8f3ea0c2"
+    },
+    "payload_base64": "",
+    "note": "Typical bars batch envelope; payload intentionally empty for transport-level validation."
+  }
+  

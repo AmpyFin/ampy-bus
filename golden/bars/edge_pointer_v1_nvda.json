@@ -1,0 +1,21 @@
+{
+    "topic": "ampy.prod.bars.v1.XNAS.NVDA",
+    "headers": {
+      "schema_fqdn": "ampy.bars.v1.BarBatch",
+      "schema_version": "1.0.0",
+      "content_type": "application/x-protobuf",
+      "produced_at": "2025-09-06T19:40:00Z",
+      "producer": "fixture@cli",
+      "source": "golden-fixture",
+      "run_id": "golden_demo",
+      "trace_id": "f2b1c7d9c4c34b3a9d0e4f5a9e2d8b11",
+      "partition_key": "XNAS.NVDA",
+      "message_id": "018f5e31-3c55-76af-9421-fd10ce9bba75",
+      "blob_ref": "s3://af-bus/prod/bars/XNAS/NVDA/2025-09-06/19-40-00.pb.gz",
+      "blob_hash": "sha256:7a9cb7...",
+      "blob_size": "842731"
+    },
+    "payload_base64": "",
+    "note": "Pointer pattern: payload externalized; blob_ref/hash/size set."
+  }
+  

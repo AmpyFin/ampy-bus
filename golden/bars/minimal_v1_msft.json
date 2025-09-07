@@ -1,0 +1,18 @@
+{
+    "topic": "ampy.prod.bars.v1.XNAS.MSFT",
+    "headers": {
+      "schema_fqdn": "ampy.bars.v1.BarBatch",
+      "schema_version": "1.0.0",
+      "content_type": "application/x-protobuf",
+      "produced_at": "2025-09-06T19:35:00Z",
+      "producer": "fixture@cli",
+      "source": "golden-fixture",
+      "run_id": "golden_demo",
+      "trace_id": "a0c1b2d3e4f5061728394a5b6c7d8e9f",
+      "partition_key": "XNAS.MSFT",
+      "message_id": "018f5e30-1a3b-7f9e-bccc-1e12a1c3e0d9"
+    },
+    "payload_base64": "",
+    "note": "Minimal bars fixture with zero-length payload."
+  }
+  

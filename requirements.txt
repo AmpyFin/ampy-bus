@@ -5,3 +5,7 @@ protobuf>=4.0.0
 jsonschema>=4.25.1
 check-jsonschema>=0.33.3
 pytest>=8.2.0
+
+# Extras
+nats-py>=2.7.2
+uuid6>=2024.1.18

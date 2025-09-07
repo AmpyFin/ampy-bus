@@ -1,0 +1,14 @@
+{
+    "topic": "ampy.prod.signals.v1.hyper@2025-09-06",
+    "headers": {
+      "schema_fqdn": "ampy.signals.v1.Signal",
+      "schema_version": "1.0.0",
+      "producer": "ampy-model-server@mdl-1",
+      "source": "ampy-model-server",
+      "produced_at": "2025-09-06T19:31:03Z",
+      "partition_key": "hyper@2025-09-06|NVDA.XNAS",
+      "content_type": "application/x-protobuf"
+    },
+    "payload_b64": ""
+  }
+  

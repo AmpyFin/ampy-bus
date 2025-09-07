@@ -1,0 +1,98 @@
+name: e2e-nats
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  crosslang-e2e:
+    runs-on: ubuntu-latest
+
+    services:
+      nats:
+        image: nats:2.10
+        ports:
+          - 4222:4222
+        # Enable JetStream
+        options: >-
+          -js
+          --health-cmd="bash -c 'echo > /dev/tcp/127.0.0.1/4222'"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Build tools
+        run: |
+          go mod download
+          go build -o ampybusctl ./cmd/ampybusctl
+          go build -o oneshot-sub ./cmd/oneshot-sub
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python package (nats extra)
+        run: pip install -e .[nats]
+
+      - name: Wait for NATS
+        run: |
+          for i in {1..30}; do
+            nc -z 127.0.0.1 4222 && echo "NATS is up" && exit 0
+            sleep 1
+          done
+          echo "NATS failed to start"; exit 1
+
+      - name: Ensure stream via CLI
+        run: |
+          # a publish call will auto-create stream AMPY with subjects ampy.>
+          ./ampybusctl pub-empty \
+            --topic ampy.prod.bars.v1.XNAS.AAPL \
+            --producer ci@go --source go --pk XNAS.AAPL \
+            --nats nats://127.0.0.1:4222
+
+      - name: Go -> Python (publish then consume)
+        run: |
+          # start Python subscriber which exits after 1 message or fails after 10s idle
+          python3 python/examples/py_nats_sub.py \
+            --subject "ampy.prod.bars.v1.>" \
+            --durable "py-ci" \
+            --exit-after 1 \
+            --timeout-sec 10 \
+            --nats nats://127.0.0.1:4222 &
+          SUB_PID=$!
+          sleep 1
+          # publish exactly one from Go
+          ./ampybusctl pub-empty \
+            --topic ampy.prod.bars.v1.XNAS.AAPL \
+            --producer go@ci --source go --pk XNAS.AAPL \
+            --nats nats://127.0.0.1:4222
+          wait $SUB_PID
+
+      - name: Python -> Go (publish then consume)
+        run: |
+          # start Go one-shot consumer (exits after 1 or times out)
+          ./oneshot-sub \
+            --subject "ampy.prod.bars.v1.>" \
+            --timeout 10s \
+            --nats nats://127.0.0.1:4222 &
+          SUB_PID=$!
+          sleep 1
+          # publish from Python
+          python3 python/examples/py_nats_pub.py \
+            --topic ampy.prod.bars.v1.XNAS.AAPL \
+            --producer py@ci --source py --pk XNAS.AAPL \
+            --count 1 \
+            --nats nats://127.0.0.1:4222
+          wait $SUB_PID

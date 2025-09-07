@@ -12,23 +12,31 @@ import (
 	"time"
 
 	"github.com/AmpyFin/ampy-bus/pkg/ampybus"
+	"github.com/AmpyFin/ampy-bus/pkg/fixture"
 	"github.com/AmpyFin/ampy-bus/pkg/ampybus/natsbinding"
 	"github.com/nats-io/nats.go"
 	"google.golang.org/protobuf/types/known/emptypb"
+	"github.com/AmpyFin/ampy-bus/pkg/ampybus/obs"
+	"github.com/AmpyFin/ampy-bus/pkg/ampybus/validate"
+
+
+
 )
 
 const help = `
 ampybusctl — AmpyFin bus control CLI
 
 USAGE:
-  ampybusctl pub-empty  --topic <ampy.topic> --producer <name> --source <name> --pk <partition_key> [--schema <fqdn>] [conn flags]
-  ampybusctl sub        --subject <pattern>  [--durable <name>] [conn flags]
-  ampybusctl dlq        [--subject ampy.prod.dlq.v1.>] [--durable <name>] [conn flags]
-  ampybusctl dlq-inspect --subject <ampy.prod.dlq.v1.*|...> [--durable <name>] [--max N] [--since RFC3339] [--outdir DIR] [--decode] [conn flags]
-  ampybusctl dlq-redrive --subject <ampy.prod.dlq.v1.*|...> [--durable <name>] [--max N] [--since RFC3339] [conn flags]
-  ampybusctl bench-pub  --topic <ampy.topic> --producer <name> --source <name> --pk <partition_key> --count <N> [--schema <fqdn>] [conn flags]
-  ampybusctl replay     --env <dev|paper|prod> --domain <bars|ticks|...> --version v1 --subtopic <XNAS.AAPL> \
-                        [--subject <ampy.* pattern>] --start <RFC3339Z> --end <RFC3339Z> --reason "<text>" [conn flags]
+  ampybusctl pub-empty      --topic <ampy.topic> --producer <name> --source <name> --pk <partition_key> [--schema <fqdn>] [--schema-hash <value>] [conn flags]
+  ampybusctl sub            --subject <pattern>  [--durable <name>] [conn flags]
+  ampybusctl dlq            [--subject ampy.prod.dlq.v1.>] [--durable <name>] [conn flags]
+  ampybusctl dlq-inspect    --subject <ampy.prod.dlq.v1.*|...> [--durable <name>] [--max N] [--since RFC3339] [--outdir DIR] [--decode] [conn flags]
+  ampybusctl dlq-redrive    --subject <ampy.prod.dlq.v1.*|...> [--durable <name>] [--max N] [--since RFC3339] [conn flags]
+  ampybusctl bench-pub      --topic <ampy.topic> --producer <name> --source <name> --pk <partition_key> --count <N> [--schema <fqdn>] [conn flags]
+  ampybusctl replay         --env <dev|paper|prod> --domain <bars|ticks|...> --version v1 --subtopic <XNAS.AAPL> \
+                            [--subject <ampy.* pattern>] --start <RFC3339Z> --end <RFC3339Z> --reason "<text>" [conn flags]
+  ampybusctl validate-fixture --file <path.json> | --dir <dir>
+  ampybusctl publish-fixture  --file <path.json> [conn flags]
 
 Connection flags (or set envs):
   --nats <url>               (env: NATS_URL)
@@ -117,6 +125,10 @@ func main() {
 		benchPub(os.Args[2:])
 	case "replay":
 		replay(os.Args[2:])
+	case "validate-fixture":
+		validateFixtureCmd(os.Args[2:])
+	case "publish-fixture":
+		publishFixtureCmd(os.Args[2:])
 	case "-h", "--help", "help":
 		fmt.Print(help)
 	default:
@@ -175,7 +187,19 @@ func pubEmpty(args []string) {
 	schema := fs.String("schema", "", "Schema FQDN (guessed from topic if omitted)")
 	schemaHash := fs.String("schema-hash", "", "OVERRIDE schema_hash header (for testing/forcing DLQ)")
 	co := addConnFlags(fs)
+	
+	useOTEL := fs.Bool("otel", false, "enable OpenTelemetry exporter")
+	otelEP  := fs.String("otel-endpoint", "", "OTLP/gRPC endpoint (e.g., localhost:4317)")
+
 	fs.Parse(args)
+
+	var shutdown func(context.Context) error = func(context.Context) error { return nil }
+	if *useOTEL {
+		var err error
+		shutdown, err = obs.InitTracer(context.Background(), "ampybusctl-"+fs.Name(), *otelEP)
+		if err != nil { fmt.Fprintf(os.Stderr, "otel init: %v\n", err) }
+		defer shutdown(context.Background())
+	}
 
 	if *topic == "" || *producer == "" || *source == "" || *pk == "" {
 		fmt.Println("missing required flags. See --help.")
@@ -195,7 +219,6 @@ func pubEmpty(args []string) {
 	defer bus.Close()
 
 	h := ampybus.NewHeaders(fqdn, *producer, *source, *pk)
-	// Intentionally override schema_hash (useful to trigger DLQ)
 	if *schemaHash != "" {
 		h.SchemaHash = *schemaHash
 	}
@@ -216,16 +239,31 @@ func pubEmpty(args []string) {
 	fmt.Printf("[publish] ack stream=%s seq=%d topic=%s msg_id=%s schema=%s\n", ack.Stream, ack.Sequence, env.Topic, h.MessageID, fqdn)
 }
 
-
 func sub(args []string) {
 	fs := flag.NewFlagSet("sub", flag.ExitOnError)
 	subject := fs.String("subject", "ampy.>", "subject pattern (e.g., ampy.prod.bars.v1.>)")
 	durable := fs.String("durable", "busctl-sub", "durable name")
+	metricsAddr := fs.String("metrics", "", "Prometheus /metrics http listen address (e.g., :9102)")
 	co := addConnFlags(fs)
+	useOTEL := fs.Bool("otel", false, "enable OpenTelemetry exporter")
+	otelEP  := fs.String("otel-endpoint", "", "OTLP/gRPC endpoint (e.g., localhost:4317)")
 	fs.Parse(args)
+
+	var shutdown func(context.Context) error = func(context.Context) error { return nil }
+	if *useOTEL {
+		var err error
+		shutdown, err = obs.InitTracer(context.Background(), "ampybusctl-"+fs.Name(), *otelEP)
+		if err != nil { fmt.Fprintf(os.Stderr, "otel init: %v\n", err) }
+		defer shutdown(context.Background())
+	}
 
 	if strings.HasSuffix(*subject, ".*") {
 		fmt.Println("[hint] NATS '*' matches one token; use '>' to match multiple segments (e.g., ampy.prod.bars.v1.>)")
+	}
+
+	if *metricsAddr != "" {
+		obs.StartMetricsServer(*metricsAddr)
+		fmt.Printf("[metrics] listening on http://127.0.0.1%s/metrics\n", *metricsAddr)
 	}
 
 	bus, err := connectWithOpts(co)
@@ -245,14 +283,13 @@ func sub(args []string) {
 			env.Topic, env.Headers.MessageID, env.Headers.SchemaFQDN, len(env.Payload), len(raw), env.Headers.PartitionKey)
 		return nil
 	})
-	if err != nil {
-		panic(err)
-	}
+	if err != nil { panic(err) }
 	defer cancel()
 
 	fmt.Printf("[sub] listening on %s (durable=%s). Ctrl+C to exit.\n", *subject, *durable)
 	wait()
 }
+
 
 func dlq(args []string) {
 	fs := flag.NewFlagSet("dlq", flag.ExitOnError)
@@ -281,8 +318,6 @@ func dlq(args []string) {
 	fmt.Printf("[dlq] listening on %s (durable=%s). Ctrl+C to exit.\n", *subject, *durable)
 	wait()
 }
-
-// ---------- DLQ Inspector ----------
 
 func dlqInspect(args []string) {
 	fs := flag.NewFlagSet("dlq-inspect", flag.ExitOnError)
@@ -316,7 +351,6 @@ func dlqInspect(args []string) {
 		startTime = &t
 	}
 
-	// Create/ensure consumer
 	cc := &nats.ConsumerConfig{
 		Durable:       *durable,
 		FilterSubject: *subject,
@@ -329,7 +363,7 @@ func dlqInspect(args []string) {
 	} else {
 		cc.DeliverPolicy = nats.DeliverAllPolicy
 	}
-	_, _ = js.AddConsumer(stream, cc) // ignore error if exists
+	_, _ = js.AddConsumer(stream, cc)
 
 	sub, err := js.PullSubscribe(*subject, *durable, nats.BindStream(stream))
 	if err != nil {
@@ -355,17 +389,14 @@ func dlqInspect(args []string) {
 			break
 		}
 		for _, m := range msgs {
-			meta, _ := m.Metadata() // may be nil in edge cases
+			meta, _ := m.Metadata()
 			fmt.Println("------------------------------------------------------------")
 			fmt.Printf("[DLQ] subject=%s\n", m.Subject)
 			if meta != nil {
 				fmt.Printf("      stream_seq=%d consumer_seq=%d time=%s\n", meta.Sequence.Stream, meta.Sequence.Consumer, meta.Timestamp.UTC().Format(time.RFC3339))
 			}
-			// Print all headers sorted
 			keys := make([]string, 0, len(m.Header))
-			for k := range m.Header {
-				keys = append(keys, k)
-			}
+			for k := range m.Header { keys = append(keys, k) }
 			sort.Strings(keys)
 			for _, k := range keys {
 				fmt.Printf("      %s: %s\n", k, m.Header.Get(k))
@@ -381,7 +412,6 @@ func dlqInspect(args []string) {
 				}
 			}
 			fmt.Printf("      payload_bytes=%d decoded_bytes=%s\n", len(m.Data), decodedSize)
-
 			if *outdir != "" {
 				msgID := m.Header.Get("message_id")
 				if msgID == "" && meta != nil {
@@ -394,19 +424,13 @@ func dlqInspect(args []string) {
 					fmt.Printf("      wrote %s\n", filename)
 				}
 			}
-
 			_ = m.Ack()
 			processed++
-			if processed >= *maxN {
-				break
-			}
+			if processed >= *maxN { break }
 		}
 	}
-
 	fmt.Printf("[dlq-inspect] processed %d message(s)\n", processed)
 }
-
-// ---------- DLQ Redrive (republish to original subject) ----------
 
 func dlqRedrive(args []string) {
 	fs := flag.NewFlagSet("dlq-redrive", flag.ExitOnError)
@@ -450,7 +474,7 @@ func dlqRedrive(args []string) {
 	} else {
 		cc.DeliverPolicy = nats.DeliverAllPolicy
 	}
-	_, _ = js.AddConsumer(stream, cc) // ignore if exists
+	_, _ = js.AddConsumer(stream, cc)
 
 	sub, err := js.PullSubscribe(*subject, *durable, nats.BindStream(stream))
 	if err != nil {
@@ -473,32 +497,18 @@ func dlqRedrive(args []string) {
 		for _, m := range msgs {
 			orig := strings.TrimPrefix(m.Subject, dlqPrefix)
 			if orig == m.Subject {
-				// not a DLQ subject; skip safely
 				_ = m.Ack()
 				continue
 			}
-
-			// Copy headers but drop dlq_reason; bump retry_count if present
 			hdr := nats.Header{}
 			for k, vals := range m.Header {
-				if strings.EqualFold(k, "dlq_reason") {
-					continue
-				}
-				for _, v := range vals {
-					hdr.Add(k, v)
-				}
+				if strings.EqualFold(k, "dlq_reason") { continue }
+				for _, v := range vals { hdr.Add(k, v) }
 			}
 			rc, _ := strconv.Atoi(hdr.Get("retry_count"))
-			if rc < 0 {
-				rc = 0
-			}
+			if rc < 0 { rc = 0 }
 			hdr.Set("retry_count", fmt.Sprintf("%d", rc+1))
-
-			out := &nats.Msg{
-				Subject: orig,
-				Header:  hdr,
-				Data:    m.Data,
-			}
+			out := &nats.Msg{Subject: orig, Header: hdr, Data: m.Data}
 			if _, err := js.PublishMsg(out); err != nil {
 				fmt.Printf("[redrive] publish error: %v\n", err)
 				_ = m.Nak()
@@ -507,12 +517,9 @@ func dlqRedrive(args []string) {
 			fmt.Printf("[redrive] %s -> %s msg_id=%s\n", m.Subject, orig, m.Header.Get("message_id"))
 			_ = m.Ack()
 			redriven++
-			if redriven >= *maxN {
-				break
-			}
+			if redriven >= *maxN { break }
 		}
 	}
-
 	fmt.Printf("[dlq-redrive] redriven %d message(s)\n", redriven)
 }
 
@@ -525,7 +532,18 @@ func benchPub(args []string) {
 	count := fs.Int("count", 1000, "messages to publish")
 	schema := fs.String("schema", "", "Schema FQDN (guessed if empty)")
 	co := addConnFlags(fs)
+	useOTEL := fs.Bool("otel", false, "enable OpenTelemetry exporter")
+	otelEP  := fs.String("otel-endpoint", "", "OTLP/gRPC endpoint (e.g., localhost:4317)")
 	fs.Parse(args)
+
+	var shutdown func(context.Context) error = func(context.Context) error { return nil }
+	if *useOTEL {
+		var err error
+		shutdown, err = obs.InitTracer(context.Background(), "ampybusctl-"+fs.Name(), *otelEP)
+		if err != nil { fmt.Fprintf(os.Stderr, "otel init: %v\n", err) }
+		defer shutdown(context.Background())
+	}
+
 
 	if *topic == "" || *producer == "" || *source == "" || *pk == "" {
 		fmt.Println("missing required flags.")
@@ -576,8 +594,20 @@ func replay(args []string) {
 	endStr := fs.String("end", "", "end RFC3339 (UTC, exclusive)")
 	reason := fs.String("reason", "manual-replay", "reason")
 	producer := fs.String("producer", "ampybusctl@host", "producer id")
+	useOTEL := fs.Bool("otel", false, "enable OpenTelemetry exporter")
+	otelEP  := fs.String("otel-endpoint", "", "OTLP/gRPC endpoint (e.g., localhost:4317)")
 	co := addConnFlags(fs)
 	fs.Parse(args)
+	
+
+	var shutdown func(context.Context) error = func(context.Context) error { return nil }
+	if *useOTEL {
+		var err error
+		shutdown, err = obs.InitTracer(context.Background(), "ampybusctl-"+fs.Name(), *otelEP)
+		if err != nil { fmt.Fprintf(os.Stderr, "otel init: %v\n", err) }
+		defer shutdown(context.Background())
+	}
+
 
 	if *startStr == "" || *endStr == "" {
 		fmt.Println("start and end are required (RFC3339 UTC).")
@@ -591,13 +621,9 @@ func replay(args []string) {
 	}
 
 	start, err := time.Parse(time.RFC3339, *startStr)
-	if err != nil {
-		panic(err)
-	}
+	if err != nil { panic(err) }
 	end, err := time.Parse(time.RFC3339, *endStr)
-	if err != nil {
-		panic(err)
-	}
+	if err != nil { panic(err) }
 	if !start.Before(end) {
 		fmt.Println("--start must be < --end")
 		os.Exit(2)
@@ -611,9 +637,7 @@ func replay(args []string) {
 	defer bus.Close()
 
 	envlp, err := ampybus.BuildReplayRequestEnvelope(*env, *domain, *version, *subtopic, *subject, start, end, *reason, *producer)
-	if err != nil {
-		panic(err)
-	}
+	if err != nil { panic(err) }
 
 	extra := map[string]string{
 		ampybus.CtrlDomainKey:    *domain,
@@ -629,11 +653,102 @@ func replay(args []string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	ack, err := bus.PublishEnvelope(ctx, envlp, extra)
-	if err != nil {
-		panic(err)
-	}
+	if err != nil { panic(err) }
 	fmt.Printf("[replay] request sent: stream=%s seq=%d topic=%s request_id=%s\n",
 		ack.Stream, ack.Sequence, envlp.Topic, envlp.Headers.MessageID)
+}
+
+
+
+func validateFixtureCmd(args []string) {
+	fs := flag.NewFlagSet("validate-fixture", flag.ExitOnError)
+	file := fs.String("file", "", "fixture JSON path")
+	dir := fs.String("dir", "", "directory of fixtures (recursive)")
+	fs.Parse(args)
+
+	if err := validate.ValidateDir(*dir); err != nil {
+		fmt.Fprintf(os.Stderr, "validation failed: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println("[validate] all fixtures OK")
+
+	var files []string
+	if *file == "" && *dir == "" {
+		fmt.Println("provide --file or --dir")
+		os.Exit(2)
+	}
+	if *file != "" {
+		files = []string{*file}
+	}
+	if *dir != "" {
+		var err error
+		files, err = fixture.WalkDir(*dir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "walk dir: %v\n", err)
+			os.Exit(1)
+		}
+		if len(files) == 0 {
+			fmt.Printf("no *.json files under %s\n", *dir)
+			return
+		}
+	}
+
+	total := 0
+	fail := 0
+	for _, p := range files {
+		ff, err := fixture.Load(p)
+		if err != nil {
+			fmt.Printf("FAIL: %s\n  - %v\n", p, err)
+			fail++
+			total++
+			continue
+		}
+		issues := ff.Validate()
+		fixture.PrettyIssues(os.Stdout, p, issues)
+		if len(issues) > 0 { fail++ }
+		total++
+	}
+	fmt.Printf("[validate-fixture] %d total, %d fail\n", total, fail)
+	if fail > 0 {
+		os.Exit(1)
+	}
+}
+
+func publishFixtureCmd(args []string) {
+	fs := flag.NewFlagSet("publish-fixture", flag.ExitOnError)
+	file := fs.String("file", "", "fixture JSON path (required)")
+	co := addConnFlags(fs)
+	fs.Parse(args)
+	if *file == "" {
+		fmt.Println("provide --file")
+		os.Exit(2)
+	}
+	ff, err := fixture.Load(*file)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load fixture: %v\n", err)
+		os.Exit(1)
+	}
+	env, err := ff.ToEnvelope()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "to envelope: %v\n", err)
+		os.Exit(1)
+	}
+	bus, err := connectWithOpts(co)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "connection failed: %v\n", err)
+		os.Exit(1)
+	}
+	defer bus.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	ack, err := bus.PublishEnvelope(ctx, env, ff.Extra)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "publish: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("PUBLISHED: stream=%s seq=%d topic=%s msg_id=%s schema=%s\n",
+		ack.Stream, ack.Sequence, env.Topic, env.Headers.MessageID, env.Headers.SchemaFQDN)
 }
 
 func getenv(k, def string) string {

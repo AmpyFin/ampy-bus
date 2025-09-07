@@ -1,0 +1,15 @@
+{
+    "topic": "ampy.prod.news.v1.raw",
+    "headers": {
+      "schema_fqdn": "ampy.news.v1.NewsItem",
+      "schema_version": "1.0.0",
+      "producer": "marketbeat-go@news-1",
+      "source": "marketbeat-go",
+      "produced_at": "2025-09-06T19:30:00Z",
+      "partition_key": "marketbeat:2025-09-06:amzn-headline-abc123",
+      "dedupe_key": "marketbeat:2025-09-06:amzn-headline-abc123",
+      "content_type": "application/x-protobuf"
+    },
+    "payload_b64": ""
+  }
+  

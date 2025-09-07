@@ -1,0 +1,14 @@
+{
+    "topic": "ampy.prod.positions.v1.snapshots",
+    "headers": {
+      "schema_fqdn": "ampy.positions.v1.Position",
+      "schema_version": "1.0.0",
+      "producer": "ampy-position-pnl@pnl-1",
+      "source": "ampy-position-pnl",
+      "produced_at": "2025-09-06T19:35:00Z",
+      "partition_key": "ALPACA-LIVE-01|AAPL.XNAS",
+      "content_type": "application/x-protobuf"
+    },
+    "payload_b64": ""
+  }
+  

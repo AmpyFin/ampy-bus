@@ -1,0 +1,15 @@
+{
+    "topic": "ampy.prod.orders.v1.requests",
+    "headers": {
+      "schema_fqdn": "ampy.orders.v1.OrderRequest",
+      "schema_version": "1.0.0",
+      "producer": "ampy-oms@oms-1",
+      "source": "ampy-oms",
+      "produced_at": "2025-09-06T19:31:05Z",
+      "partition_key": "co_20250906_001",
+      "dedupe_key": "co_20250906_001",
+      "content_type": "application/x-protobuf"
+    },
+    "payload_b64": ""
+  }
+  

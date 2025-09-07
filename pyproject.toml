@@ -1,22 +1,65 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "ampy-bus"
 version = "0.1.0"
 description = "Transport-agnostic messaging conventions & helpers for AmpyFin"
-authors = [{ name = "AmpyFin" }]
-requires-python = ">=3.8"
-dependencies = ["protobuf>=4.0.0"]
 readme = "README.md"
+requires-python = ">=3.8"
 license = { text = "Apache-2.0" }
+dependencies = [
+  "protobuf>=4.0.0",
+]
 
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers", 
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+# Optional dependency groups (install with: pip install -e .[nats], pip install -e .[dev])
 [project.optional-dependencies]
-dev = ["jsonschema>=4.25.1", "check-jsonschema>=0.33.3", "pytest>=8.2.0"]
+nats = [
+  "nats-py>=2.7.2",
+  "uuid6>=2024.1.18",
+  "prometheus_client>=0.16.0",
+  "opentelemetry-api>=1.28.0",
+  "opentelemetry-sdk>=1.28.0",
+  "opentelemetry-exporter-otlp>=1.28.0",
+]
+dev = [
+  "jsonschema>=4.25.1",
+  "check-jsonschema>=0.33.3",
+]
 
 [tool.setuptools]
+# our code lives under ./python
 package-dir = {"" = "python"}
 
 [tool.setuptools.packages.find]
 where = ["python"]
+exclude = ["python/examples*"]
+
+# (Optional niceties)
+[tool.black]
+line-length = 100
+target-version = ["py38"]
+
+[tool.isort]
+profile = "black"
+
+nats = [
+  "nats-py>=2.7.2",
+  "uuid6>=2024.1.18",
+  "prometheus_client>=0.16.0",
+  "opentelemetry-sdk>=1.25.0",
+  "opentelemetry-exporter-otlp>=1.25.0",
+]
