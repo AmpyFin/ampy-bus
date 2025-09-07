@@ -51,7 +51,7 @@ jobs:
       - name: Start NATS (JetStream)
         shell: bash
         run: |
-          docker run -d --name nats -p 4222:4222 nats:2.10 -js
+          docker run -d --name nats -p 4222:4222 nats:2.10 -- -js
           for i in {1..30}; do (echo > /dev/tcp/127.0.0.1/4222) >/dev/null 2>&1 && echo "NATS ready" && break; sleep 1; done
 
       - name: NATS publish (ampybusctl)

@@ -1,3 +1,5 @@
+from ._version import __version__
+
 from .envelope import (
     CONTENT_TYPE_PROTOBUF,
     ENCODING_GZIP,
