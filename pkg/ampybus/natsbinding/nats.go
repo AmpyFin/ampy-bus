@@ -290,6 +290,11 @@ func firstLine(s string) string {
 	return s
 }
 
+// MessageToEnvelope converts a NATS message to an ampybus.Envelope
+func MessageToEnvelope(m *nats.Msg) (ampybus.Envelope, error) {
+	return toEnvelope(m), nil
+}
+
 func toEnvelope(m *nats.Msg) ampybus.Envelope {
 	var h ampybus.Headers
 	get := func(k string) string { if m.Header == nil { return "" }; return m.Header.Get(k) }
