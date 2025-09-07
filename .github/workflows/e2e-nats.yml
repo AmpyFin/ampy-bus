@@ -44,6 +44,7 @@ jobs:
           import socket
           import time
           import sys
+          print('Waiting for NATS to be ready...')
           for i in range(60):
               try:
                   sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -51,14 +52,14 @@ jobs:
                   result = sock.connect_ex(('127.0.0.1', 4222))
                   sock.close()
                   if result == 0:
-                      # Port is open, wait a bit more for NATS to be ready
-                      time.sleep(2)
-                      print('NATS is up')
+                      print('NATS port is open, waiting for full readiness...')
+                      time.sleep(3)
+                      print('NATS is ready')
                       sys.exit(0)
-              except:
-                  pass
+              except Exception as e:
+                  print(f'Connection attempt {i+1} failed: {e}')
               time.sleep(1)
-          print('NATS failed to start')
+          print('NATS failed to start within 60 seconds')
           sys.exit(1)
           "
 
