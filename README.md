@@ -11,7 +11,7 @@ make build
 # Install Python package
 pip install -e .[nats]
 
-# Start NATS server
+# Start NATS server with JetStream (REQUIRED)
 docker run -d --name nats -p 4222:4222 nats:2.10 -js
 
 # Publish a message (NATS)
@@ -25,6 +25,74 @@ docker run -d --name nats -p 4222:4222 nats:2.10 -js
 ./kafkabusctl pub-empty --brokers 127.0.0.1:9092 \
   --topic ampy.prod.bars.v1.XNAS.AAPL \
   --producer yfinance-go@ingest-1 --source yfinance-go --pk XNAS.AAPL
+```
+
+## ⚠️ CRITICAL: NATS JetStream Requirement
+
+**ampy-bus requires NATS with JetStream enabled** for all NATS-based operations. Without JetStream, you'll encounter errors like:
+
+```
+Failed to ensure stream: nats: no responders available for request
+```
+
+### Quick NATS Setup
+
+**Option 1: Docker (Recommended)**
+```bash
+# Start NATS with JetStream enabled (REQUIRED)
+docker run -d --name nats -p 4222:4222 nats:2.10 -js
+
+# Verify JetStream is running (check logs)
+docker logs nats | grep "Starting JetStream"
+```
+
+**Option 2: Local Installation**
+```bash
+# Install NATS server
+brew install nats-server  # macOS
+# or download from https://github.com/nats-io/nats-server/releases
+
+# Start NATS with JetStream enabled (REQUIRED)
+nats-server -js
+
+# Verify JetStream is running (you should see "Starting JetStream" in the logs)
+```
+
+**Option 3: Using the CLI**
+```bash
+# Start with JetStream and other options
+nats-server -js --store_dir /tmp/nats/jetstream --max_memory_store 1GB
+```
+
+> **Note**: The `-js` flag is essential. Without it, ampy-bus operations will fail.
+
+### Troubleshooting JetStream Issues
+
+**Common Error Messages:**
+```bash
+# Error: No JetStream enabled
+Failed to ensure stream: nats: no responders available for request
+
+# Error: JetStream not ready
+nats: context deadline exceeded
+```
+
+**Solutions:**
+1. **Verify JetStream is enabled**: Check logs for "Starting JetStream"
+2. **Wait for startup**: JetStream takes a few seconds to initialize
+3. **Check port**: Ensure NATS is running on port 4222
+4. **Restart with JetStream**: Stop and restart with `-js` flag
+
+**Verification Commands:**
+```bash
+# Check if JetStream is running
+docker logs nats | grep "Starting JetStream"
+
+# Test connection
+nats server info
+
+# List JetStream streams (if available)
+nats stream list
 ```
 
 ## 🎯 What Problem Does This Solve?
@@ -105,12 +173,12 @@ python -c "import ampybus; print(f'ampy-bus version: {ampybus.__version__}')"
 ### Docker Setup (Optional)
 
 ```bash
-# Start NATS server
-docker run -d --name nats -p 4222:4222 nats:latest
+# Start NATS server with JetStream (REQUIRED for ampy-bus)
+docker run -d --name nats -p 4222:4222 nats:2.10 -js
 
 # Start Redpanda (Kafka-compatible)
 docker run -d --name redpanda -p 9092:9092 -p 9644:9644 \
-  docker.redpanda.com/redpanda/redpanda:latest \
+  redpandadata/redpanda:latest \
   redpanda start --overprovisioned --smp 1 --memory 1G
 ```
 
@@ -469,7 +537,7 @@ await bus.publish("ampy.prod.bars.v1.XNAS.AAPL", env.headers, protobuf_data)
 
 **Option A: NATS (Recommended for development)**
 ```bash
-docker run -d --name nats -p 4222:4222 nats:latest
+docker run -d --name nats -p 4222:4222 nats:2.10 -js
 ```
 
 **Option B: Kafka/Redpanda**
@@ -712,7 +780,7 @@ python python/examples/py_dlq_redrive.py
 
 **1. Start Required Services:**
 ```bash
-# Start NATS with JetStream
+# Start NATS with JetStream (REQUIRED for ampy-bus)
 docker run -d --name nats -p 4222:4222 nats:2.10 -js
 
 # Start Redpanda (Kafka-compatible)
