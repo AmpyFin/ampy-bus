@@ -34,6 +34,8 @@ jobs:
           go build -o kafkabusctl  ./cmd/kafkabusctl
           go build -o kafkapoison  ./cmd/kafkapoison
           go build -o kafkainspect ./cmd/kafkainspect
+          go build -o benchkafka   ./cmd/benchkafka
+          go build -o benchnats    ./cmd/benchnats
 
       - name: Python install (editable) with NATS extra
         run: |
@@ -43,14 +45,14 @@ jobs:
       # ---------- Golden fixtures ----------
       - name: Validate golden fixtures (if present)
         run: |
-          # This will print "no *.json files under golden" and exit 0 if dir is empty/missing.
           ./ampybusctl validate-fixture --dir golden || true
 
-      # ---------- NATS (JetStream) smoke ----------
+      # ---------- NATS (JetStream) smoke + SLO bench ----------
       - name: Start NATS (JetStream)
+        shell: bash
         run: |
           docker run -d --name nats -p 4222:4222 nats:2.10 -js
-          for i in {1..30}; do nc -z 127.0.0.1 4222 && echo "NATS ready" && break; sleep 1; done
+          for i in {1..30}; do (echo > /dev/tcp/127.0.0.1/4222) >/dev/null 2>&1 && echo "NATS ready" && break; sleep 1; done
 
       - name: NATS publish (ampybusctl)
         run: |
@@ -67,15 +69,25 @@ jobs:
             --exit-after 1 --timeout-sec 10 \
             --nats nats://127.0.0.1:4222
 
-      # ---------- Redpanda/Kafka DLQ smoke ----------
+      - name: NATS bench with SLO gates
+        run: |
+          ./benchnats \
+            --subject ampy.prod.bars.v1.XNAS.AAPL \
+            --nats nats://127.0.0.1:4222 \
+            --count 1000 --concurrency 4 --payload-bytes 256 --gzip \
+            --timeout 35s \
+            --slo-p95-ms 150 --slo-p99-ms 300 --min-throughput 200
+
+      # ---------- Redpanda/Kafka DLQ smoke (true concurrent) + SLO bench ----------
       - name: Start Redpanda
+        shell: bash
         run: |
           docker run -d --name redpanda -p 9092:9092 -p 9644:9644 redpandadata/redpanda:latest \
             redpanda start --overprovisioned --smp 1 --memory 1G --reserve-memory 0M \
             --node-id 0 --check=false \
             --kafka-addr "PLAINTEXT://0.0.0.0:9092" \
             --advertise-kafka-addr "PLAINTEXT://127.0.0.1:9092"
-          for i in {1..60}; do nc -z 127.0.0.1 9092 && echo "Kafka ready" && break; sleep 1; done
+          for i in {1..60}; do (echo > /dev/tcp/127.0.0.1/9092) >/dev/null 2>&1 && echo "Kafka ready" && break; sleep 1; done
 
       - name: Ensure Kafka topic
         run: |
@@ -84,20 +96,27 @@ jobs:
             --topic ampy.prod.bars.v1.XNAS.AAPL \
             --partitions 3
 
-      - name: Start Kafka consumer (background) that DLQs on decode error
+      - name: Kafka DLQ smoke (consumer + poison in one step)
+        shell: bash
         run: |
-          # run for ~10s then exit
-          timeout 10s ./kafkabusctl sub \
+          set -euo pipefail
+          # start consumer in background (will DLQ on decode error)
+          ./kafkabusctl sub \
             --brokers 127.0.0.1:9092 \
             --topic ampy.prod.bars.v1.XNAS.AAPL \
-            --group ci-consumer || true
-
-      - name: Publish poison to Kafka (bad gzip)
-        run: |
+            --group ci-consumer > kafka_consumer.log 2>&1 &
+          cons_pid=$!
+          sleep 2
+          # publish poison (bad gzip)
           ./kafkapoison \
             --brokers 127.0.0.1:9092 \
             --topic ampy.prod.bars.v1.XNAS.AAPL \
             --producer poison@ci --source poison-test --pk XNAS.AAPL
+          # wait a moment for DLQ write
+          sleep 3
+          # stop consumer
+          kill $cons_pid || true
+          wait $cons_pid || true
 
       - name: Inspect DLQ topic (should contain the poison)
         run: |
@@ -106,3 +125,22 @@ jobs:
             --topic ampy.prod.dlq.v1.ampy.prod.bars.v1.XNAS.AAPL \
             --group dlq-inspector \
             --max 5
+
+      - name: Kafka bench with SLO gates
+        run: |
+          ./benchkafka \
+            --brokers 127.0.0.1:9092 \
+            --topic ampy.prod.bars.v1.XNAS.AAPL \
+            --partitions 3 \
+            --count 1000 --concurrency 4 --payload-bytes 256 --gzip \
+            --timeout 40s \
+            --slo-p95-ms 150 --slo-p99-ms 300 --min-throughput 120
+
+      - name: Upload logs (if any)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-logs
+          path: |
+            kafka_consumer.log
+
