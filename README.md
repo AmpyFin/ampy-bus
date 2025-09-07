@@ -11,6 +11,9 @@ make build
 # Install Python package
 pip install -e .[nats]
 
+# Start NATS server
+docker run -d --name nats -p 4222:4222 nats:2.10 -js
+
 # Publish a message (NATS)
 ./ampybusctl pub-empty --topic ampy.prod.bars.v1.XNAS.AAPL \
   --producer yfinance-go@ingest-1 --source yfinance-go --pk XNAS.AAPL
@@ -66,7 +69,24 @@ make build
 
 ### Python Installation
 
+**From PyPI (Recommended):**
 ```bash
+# Install core package
+pip install ampy-bus
+
+# Install with NATS support (includes nats-py, OpenTelemetry, etc.)
+pip install ampy-bus[nats]
+
+# Install development dependencies
+pip install ampy-bus[dev]
+```
+
+**From Source:**
+```bash
+# Clone and install
+git clone https://github.com/AmpyFin/ampy-bus.git
+cd ampy-bus
+
 # Install core package
 pip install -e .
 
@@ -75,6 +95,11 @@ pip install -e .[nats]
 
 # Install development dependencies
 pip install -e .[dev]
+```
+
+**Verify Installation:**
+```bash
+python -c "import ampybus; print(f'ampy-bus version: {ampybus.__version__}')"
 ```
 
 ### Docker Setup (Optional)
@@ -169,9 +194,39 @@ Generate poison messages for DLQ testing:
   --producer poison@cli --source poison-test --pk XNAS.AAPL
 ```
 
-## 📚 Examples & Features
+## 📚 Complete Examples & Use Cases
 
-### Basic Pub/Sub
+### 🏗️ Available Examples
+
+The repository includes comprehensive examples for all major use cases:
+
+**Go Examples:**
+- `examples/go/simple_roundtrip/main.go` - Basic pub/sub with NATS
+- `examples/go/nats_pubsub/main.go` - Advanced NATS pub/sub patterns
+- `examples/go/replayer/main.go` - Message replay functionality
+
+**Python Examples:**
+- `python/examples/simple_roundtrip.py` - Basic async pub/sub
+- `python/examples/py_nats_pub.py` - Publisher example
+- `python/examples/py_nats_sub.py` - Subscriber example
+- `python/examples/py_dlq_inspect.py` - DLQ inspection
+- `python/examples/py_dlq_redrive.py` - DLQ message redrive
+- `python/examples/py_send_poison.py` - Poison message testing
+
+**Message Examples:**
+- `examples/bars_v1_XNAS_AAPL.json` - OHLCV bar data
+- `examples/ticks_v1_trade_MSFT.json` - Trade tick data
+- `examples/news_v1_raw.json` - News article data
+- `examples/signals_v1_hyper_NVDA.json` - ML trading signals
+- `examples/orders_v1_request.json` - Order request data
+- `examples/fills_v1_event.json` - Fill event data
+- `examples/positions_v1_snapshot.json` - Position snapshot
+- `examples/fx_v1_USD_JPY.json` - FX rate data
+- `examples/metrics_v1_oms_order_rejects.json` - System metrics
+- `examples/dlq_v1_bars.json` - Dead letter queue example
+- `examples/control_v1_replay_request.json` - Replay control message
+
+### 🚀 Basic Pub/Sub Examples
 
 **Go Example:**
 ```go
@@ -180,6 +235,8 @@ package main
 
 import (
     "context"
+    "fmt"
+    "github.com/AmpyFin/ampy-bus/pkg/ampybus"
     "github.com/AmpyFin/ampy-bus/pkg/ampybus/natsbinding"
 )
 
@@ -228,6 +285,78 @@ async def main():
     await bus.subscribe("ampy.prod.bars.v1.>", handler)
 
 asyncio.run(main())
+```
+
+### 📊 Market Data Examples
+
+**OHLCV Bars:**
+```bash
+# Publish bar data
+./ampybusctl pub-empty --topic ampy.prod.bars.v1.XNAS.AAPL \
+  --producer yfinance-go@ingest-1 --source yfinance-go --pk XNAS.AAPL
+
+# Subscribe to all bar data
+./ampybusctl sub --subject "ampy.prod.bars.v1.>"
+```
+
+**Trade Ticks:**
+```bash
+# Publish tick data
+./ampybusctl pub-empty --topic ampy.prod.ticks.v1.trade.MSFT \
+  --producer databento-cpp@tick-1 --source databento-cpp --pk MSFT.XNAS
+
+# Subscribe to trade ticks
+./ampybusctl sub --subject "ampy.prod.ticks.v1.trade.>"
+```
+
+**FX Rates:**
+```bash
+# Publish FX data
+./ampybusctl pub-empty --topic ampy.prod.fx.v1.USD.JPY \
+  --producer oanda-api@fx-1 --source oanda-api --pk USD.JPY
+```
+
+### 🤖 Trading System Examples
+
+**ML Signals:**
+```bash
+# Publish trading signals
+./ampybusctl pub-empty --topic ampy.prod.signals.v1.hyper@2025-01-01 \
+  --producer ampy-model@mdl-1 --source ampy-model --pk hyper@2025-01-01|NVDA.XNAS
+```
+
+**Order Management:**
+```bash
+# Publish order requests
+./ampybusctl pub-empty --topic ampy.prod.orders.v1.requests \
+  --producer ampy-oms@oms-1 --source ampy-oms --pk co_20250101_001
+
+# Publish fill events
+./ampybusctl pub-empty --topic ampy.prod.fills.v1.events \
+  --producer ampy-oms@oms-1 --source ampy-oms --pk fill_20250101_001
+```
+
+**Position Tracking:**
+```bash
+# Publish position snapshots
+./ampybusctl pub-empty --topic ampy.prod.positions.v1.snapshots \
+  --producer ampy-oms@oms-1 --source ampy-oms --pk portfolio_20250101
+```
+
+### 📰 News & Information Examples
+
+**News Articles:**
+```bash
+# Publish news data
+./ampybusctl pub-empty --topic ampy.prod.news.v1.raw \
+  --producer news-scraper@news-1 --source news-scraper --pk news_20250101_001
+```
+
+**System Metrics:**
+```bash
+# Publish system metrics
+./ampybusctl pub-empty --topic ampy.prod.metrics.v1.ampy-oms \
+  --producer ampy-oms@oms-1 --source ampy-oms --pk metrics_20250101
 ```
 
 ### Dead Letter Queue (DLQ) Handling
@@ -374,70 +503,277 @@ pip install -e .[nats]
 python python/examples/simple_roundtrip.py
 ```
 
-## 🎯 Common Use Cases
+## 🎯 Real-World Use Cases
 
-### Market Data Ingestion
+### 📈 Market Data Ingestion & Distribution
 
+**Multi-Source Data Aggregation:**
 ```bash
-# Ingest bars data
+# Ingest from multiple sources
 ./ampybusctl pub-empty --topic ampy.prod.bars.v1.XNAS.AAPL \
   --producer yfinance-go@ingest-1 --source yfinance-go --pk XNAS.AAPL
 
-# Ingest tick data  
+./ampybusctl pub-empty --topic ampy.prod.bars.v1.XNAS.AAPL \
+  --producer alpha-vantage@ingest-2 --source alpha-vantage --pk XNAS.AAPL
+
+# High-frequency tick data
 ./ampybusctl pub-empty --topic ampy.prod.ticks.v1.trade.MSFT \
   --producer databento-cpp@tick-1 --source databento-cpp --pk MSFT.XNAS
+
+# FX rates
+./ampybusctl pub-empty --topic ampy.prod.fx.v1.USD.JPY \
+  --producer oanda-api@fx-1 --source oanda-api --pk USD.JPY
 ```
 
-### Trading System Integration
-
+**Real-Time Data Distribution:**
 ```bash
-# Publish trading signals
+# Multiple consumers can subscribe to the same data
+./ampybusctl sub --subject "ampy.prod.bars.v1.>" --durable market-data-consumer
+./ampybusctl sub --subject "ampy.prod.ticks.v1.trade.>" --durable tick-processor
+./ampybusctl sub --subject "ampy.prod.fx.v1.>" --durable fx-monitor
+```
+
+### 🤖 Trading System Integration
+
+**ML Signal Generation & Distribution:**
+```bash
+# Publish ML trading signals
 ./ampybusctl pub-empty --topic ampy.prod.signals.v1.hyper@2025-01-01 \
   --producer ampy-model@mdl-1 --source ampy-model --pk hyper@2025-01-01|NVDA.XNAS
 
+# Subscribe to signals for trading
+./ampybusctl sub --subject "ampy.prod.signals.v1.>" --durable signal-processor
+```
+
+**Order Management System:**
+```bash
 # Publish order requests
 ./ampybusctl pub-empty --topic ampy.prod.orders.v1.requests \
   --producer ampy-oms@oms-1 --source ampy-oms --pk co_20250101_001
+
+# Publish fill events
+./ampybusctl pub-empty --topic ampy.prod.fills.v1.events \
+  --producer ampy-oms@oms-1 --source ampy-oms --pk fill_20250101_001
+
+# Subscribe to order events
+./ampybusctl sub --subject "ampy.prod.orders.v1.>" --durable order-tracker
+./ampybusctl sub --subject "ampy.prod.fills.v1.>" --durable fill-processor
 ```
 
-### Monitoring & Observability
+**Position & Risk Management:**
+```bash
+# Publish position snapshots
+./ampybusctl pub-empty --topic ampy.prod.positions.v1.snapshots \
+  --producer ampy-oms@oms-1 --source ampy-oms --pk portfolio_20250101
 
+# Subscribe for risk monitoring
+./ampybusctl sub --subject "ampy.prod.positions.v1.>" --durable risk-monitor
+```
+
+### 📰 News & Information Processing
+
+**News Ingestion & NLP:**
+```bash
+# Raw news ingestion
+./ampybusctl pub-empty --topic ampy.prod.news.v1.raw \
+  --producer news-scraper@news-1 --source news-scraper --pk news_20250101_001
+
+# Processed news (after NLP)
+./ampybusctl pub-empty --topic ampy.prod.news.v1.nlp \
+  --producer nlp-processor@nlp-1 --source nlp-processor --pk news_20250101_001
+
+# Subscribe to news for sentiment analysis
+./ampybusctl sub --subject "ampy.prod.news.v1.>" --durable sentiment-analyzer
+```
+
+### 🔍 Monitoring & Observability
+
+**System Health Monitoring:**
+```bash
+# Publish system metrics
+./ampybusctl pub-empty --topic ampy.prod.metrics.v1.ampy-oms \
+  --producer ampy-oms@oms-1 --source ampy-oms --pk metrics_20250101
+
+# Subscribe to metrics for monitoring
+./ampybusctl sub --subject "ampy.prod.metrics.v1.>" --durable metrics-collector
+```
+
+**Error Handling & DLQ Management:**
 ```bash
 # Monitor DLQ for issues
-./ampybusctl dlq-inspect --subject "ampy.prod.dlq.v1.>" --max 10
+./ampybusctl dlq-inspect --subject "ampy.prod.dlq.v1.>" --max 10 --decode
 
-# Check system metrics
-./ampybusctl sub --subject "ampy.prod.metrics.v1.>"
+# Redrive messages after fixing issues
+./ampybusctl dlq-redrive --subject "ampy.prod.dlq.v1.>" --max 5
 ```
 
-### Backtesting & Research
+### 🔬 Backtesting & Research
 
+**Historical Data Replay:**
 ```bash
-# Replay historical data for backtesting
+# Replay bars data for backtesting
 ./ampybusctl replay --env prod --domain bars --version v1 --subtopic XNAS.AAPL \
   --start 2025-01-01T09:30:00Z --end 2025-01-01T16:00:00Z \
   --reason "backtest-2025-01-01"
 
-# Replay specific time window
+# Replay tick data for analysis
 ./ampybusctl replay --subject "ampy.prod.ticks.v1.trade.>" \
   --start 2025-01-01T09:30:00Z --end 2025-01-01T10:00:00Z \
   --reason "tick-analysis"
+
+# Replay news data for sentiment backtesting
+./ampybusctl replay --subject "ampy.prod.news.v1.>" \
+  --start 2025-01-01T00:00:00Z --end 2025-01-01T23:59:59Z \
+  --reason "news-sentiment-backtest"
 ```
 
-### Development & Testing
+### 🏢 Enterprise Use Cases
 
+**Multi-Environment Deployment:**
 ```bash
-# Performance testing
+# Development environment
+./ampybusctl pub-empty --topic ampy.dev.bars.v1.XNAS.AAPL \
+  --producer test@dev --source test --pk XNAS.AAPL
+
+# Paper trading environment
+./ampybusctl pub-empty --topic ampy.paper.orders.v1.requests \
+  --producer paper-oms@paper-1 --source paper-oms --pk paper_order_001
+
+# Production environment
+./ampybusctl pub-empty --topic ampy.prod.bars.v1.XNAS.AAPL \
+  --producer yfinance-go@prod-1 --source yfinance-go --pk XNAS.AAPL
+```
+
+**Compliance & Audit:**
+```bash
+# Replay all trading activity for audit
+./ampybusctl replay --subject "ampy.prod.orders.v1.>" \
+  --start 2025-01-01T00:00:00Z --end 2025-01-31T23:59:59Z \
+  --reason "monthly-audit-2025-01"
+
+# Replay all fills for reconciliation
+./ampybusctl replay --subject "ampy.prod.fills.v1.>" \
+  --start 2025-01-01T00:00:00Z --end 2025-01-31T23:59:59Z \
+  --reason "fills-reconciliation-2025-01"
+```
+
+### 🧪 Development & Testing Examples
+
+**Performance Testing:**
+```bash
+# Benchmark publishing performance
 ./ampybusctl bench-pub --topic ampy.prod.bars.v1.XNAS.AAPL \
   --producer bench@test --source bench --pk XNAS.AAPL --count 1000
 
-# Test DLQ handling
+# Benchmark with Go
+go run cmd/benchkafka/main.go --brokers 127.0.0.1:9092 \
+  --topic ampy.prod.bars.v1.XNAS.AAPL --count 10000
+
+# Benchmark with NATS
+go run cmd/benchnats/main.go --subject ampy.prod.bars.v1.XNAS.AAPL \
+  --count 10000 --nats nats://127.0.0.1:4222
+```
+
+**DLQ Testing:**
+```bash
+# Send poison message (will trigger DLQ)
 ./kafkapoison --brokers 127.0.0.1:9092 \
   --topic ampy.prod.bars.v1.XNAS.AAPL \
   --producer poison@test --source poison-test --pk XNAS.AAPL
 
+# Or use Python
+python python/examples/py_send_poison.py
+
+# Inspect DLQ messages
+./ampybusctl dlq-inspect --subject "ampy.prod.dlq.v1.>" --max 5 --decode
+
+# Or use Python
+python python/examples/py_dlq_inspect.py
+
+# Redrive messages from DLQ
+./ampybusctl dlq-redrive --subject "ampy.prod.dlq.v1.>" --max 5
+
+# Or use Python
+python python/examples/py_dlq_redrive.py
+```
+
+**Message Validation:**
+```bash
 # Validate message fixtures
 ./ampybusctl validate-fixture --file examples/bars_v1_XNAS_AAPL.json
+./ampybusctl validate-fixture --file examples/ticks_v1_trade_MSFT.json
+./ampybusctl validate-fixture --file examples/news_v1_raw.json
+
+# Validate all fixtures in directory
+./ampybusctl validate-fixture --dir examples/
+```
+
+### 🎯 Running All Examples
+
+**1. Start Required Services:**
+```bash
+# Start NATS with JetStream
+docker run -d --name nats -p 4222:4222 nats:2.10 -js
+
+# Start Redpanda (Kafka-compatible)
+docker run -d --name redpanda -p 9092:9092 -p 9644:9644 \
+  redpandadata/redpanda:latest redpanda start --overprovisioned --smp 1 --memory 1G
+```
+
+**2. Build All Tools:**
+```bash
+make build
+```
+
+**3. Run Go Examples:**
+```bash
+# Basic roundtrip
+go run examples/go/simple_roundtrip/main.go
+
+# Advanced NATS pub/sub
+go run examples/go/nats_pubsub/main.go
+
+# Message replayer
+go run examples/go/replayer/main.go
+```
+
+**4. Run Python Examples:**
+```bash
+# Install Python package
+pip install -e .[nats]
+
+# Basic roundtrip
+python python/examples/simple_roundtrip.py
+
+# Publisher
+python python/examples/py_nats_pub.py
+
+# Subscriber
+python python/examples/py_nats_sub.py
+
+# DLQ operations
+python python/examples/py_dlq_inspect.py
+python python/examples/py_dlq_redrive.py
+python python/examples/py_send_poison.py
+```
+
+**5. Test CLI Tools:**
+```bash
+# NATS operations
+./ampybusctl pub-empty --topic ampy.prod.bars.v1.XNAS.AAPL \
+  --producer test@cli --source test --pk XNAS.AAPL
+./ampybusctl sub --subject "ampy.prod.bars.v1.>"
+
+# Kafka operations
+./kafkabusctl ensure-topic --brokers 127.0.0.1:9092 \
+  --topic ampy.prod.bars.v1.XNAS.AAPL --partitions 3
+./kafkabusctl pub-empty --brokers 127.0.0.1:9092 \
+  --topic ampy.prod.bars.v1.XNAS.AAPL \
+  --producer test@cli --source test --pk XNAS.AAPL
+
+# Inspection tools
+./kafkainspect --brokers 127.0.0.1:9092 \
+  --topic ampy.prod.bars.v1.XNAS.AAPL --group inspector --max 5
 ```
 
 ## 📖 Documentation
