@@ -1414,7 +1414,3 @@ Those are **producers** (e.g., FX Go client, Marketbeat Go) that emit domain pay
 **Topics:** `trading-systems`, `messaging`, `protobuf`, `nats`, `kafka`, `event-driven`, `fintech`, `observability`, `slo`, `open-source`, `ampyfin`
 
 ---
-
----
-
-**This README is the contract.** With it, an LLM (or human) can implement `ampy-bus` end‑to‑end without guessing, while leaving broker choice and internal code structure flexible.
