@@ -45,7 +45,8 @@ func main() {
 	})
 	defer r.Close()
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	count := 0
 	for {
 		if *max > 0 && count >= *max {
@@ -53,6 +54,14 @@ func main() {
 		}
 		m, err := r.ReadMessage(ctx)
 		if err != nil {
+			if err == context.DeadlineExceeded || strings.Contains(err.Error(), "context deadline exceeded") {
+				fmt.Fprintf(os.Stderr, "timeout: no messages received within 30 seconds\n")
+				if count == 0 {
+					fmt.Fprintf(os.Stderr, "no messages found in topic %s\n", *topic)
+					os.Exit(0) // Exit successfully if no messages found
+				}
+				break
+			}
 			fmt.Fprintf(os.Stderr, "read: %v\n", err)
 			os.Exit(1)
 		}
@@ -79,3 +88,5 @@ func main() {
 	}
 	fmt.Printf("[inspect] done, printed %d message(s)\n", count)
 }
+
+
