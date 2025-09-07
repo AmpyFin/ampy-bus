@@ -10,19 +10,6 @@ jobs:
   crosslang-e2e:
     runs-on: ubuntu-latest
 
-    services:
-      nats:
-        image: nats:2.10
-        ports:
-          - 4222:4222
-        # Enable JetStream
-        options: >-
-          -- -js
-          --health-cmd="bash -c 'echo > /dev/tcp/127.0.0.1/4222'"
-          --health-interval=5s
-          --health-timeout=5s
-          --health-retries=20
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -45,6 +32,11 @@ jobs:
 
       - name: Install Python package (nats extra)
         run: pip install -e .[nats]
+
+      - name: Start NATS (JetStream)
+        shell: bash
+        run: |
+          docker run -d --name nats -p 4222:4222 nats:2.10 -- -js
 
       - name: Wait for NATS
         run: |
