@@ -1,0 +1,22 @@
+{
+  "dlq_subject": "ampy.prod.dlq.v1.ampy.prod.bars.v1.XNAS.AAPL",
+  "original_subject": "ampy.prod.bars.v1.XNAS.AAPL",
+  "headers": {
+    "message_id": "0199226e-03d7-7134-b7d9-53b4d1310c94",
+    "schema_fqdn": "ampy.bars.v1.BarBatch",
+    "schema_version": "1.0.0",
+    "content_type": "application/x-protobuf",
+    "content_encoding": "gzip",
+    "produced_at": "2025-09-07T04:27:39.351194+00:00",
+    "producer": "poison@py",
+    "source": "poison-test",
+    "run_id": "run_local",
+    "partition_key": "XNAS.AAPL",
+    "schema_hash": "nameonly:sha256:3b2d6ec8fee72f3910ca2f7c9b852eb73c8d6be4150bad6e0142478a318031f9",
+    "dlq_inject_reason": "decode_error_test",
+    "trace_id": "00000000000000000000000000000000",
+    "span_id": "0000000000000000",
+    "dlq_reason": "Not a gzipped file (b'NO')"
+  },
+  "payload_file": "/Users/yeonlee/ampy-bus/dlq_dump/20250907T043124387172Z_0199226e-03d7-7134-b7d9-53b4d1310c94.bin"
+}

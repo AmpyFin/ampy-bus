@@ -1,16 +1,469 @@
-# ampy-bus — Messaging Conventions & Helpers (Open Source)
+# ampy-bus — Transport-Agnostic Messaging for Trading Systems
 
-> **Purpose:** Define **transport‑agnostic, versioned messaging contracts** and operating rules for how AmpyFin services publish, subscribe, route, replay, and observe events built on top of `ampy-proto`. This README is **LLM‑ready**: it specifies *what to build and how it should behave* without prescribing implementation details or repository structure. Include it alongside the AmpyFin background so an LLM can design and implement the system.
+> **Transport-agnostic messaging conventions and helpers** for AmpyFin trading systems. Standardize topics, headers, QoS, replay, and observability across NATS and Kafka with consistent `ampy-proto` payloads.
 
----
+## 🚀 Quick Start
 
-## 0) TL;DR
+```bash
+# Install Go CLI tools
+make build
 
-- A single, consistent **messaging layer** for all AmpyFin subsystems (ingestion, research/ML, backtesting, execution, monitoring).
-- **Transport‑agnostic**: works on NATS or Kafka with the **same** envelopes, topics, headers, and QoS semantics.
-- Uses **`ampy-proto`** as the only payload source of truth; the bus defines **envelopes + headers** around those payloads.
-- Clear **ordering keys, retries, DLQ, replay/backfill**, and **observability** rules so the system is reproducible and auditable.
-- Initial helper libraries: **Go** (primary) and **Python**, with example producers/consumers (no business logic).
+# Install Python package
+pip install -e .[nats]
+
+# Publish a message (NATS)
+./ampybusctl pub-empty --topic ampy.prod.bars.v1.XNAS.AAPL \
+  --producer yfinance-go@ingest-1 --source yfinance-go --pk XNAS.AAPL
+
+# Subscribe to messages
+./ampybusctl sub --subject "ampy.prod.bars.v1.>"
+
+# Kafka alternative
+./kafkabusctl pub-empty --brokers 127.0.0.1:9092 \
+  --topic ampy.prod.bars.v1.XNAS.AAPL \
+  --producer yfinance-go@ingest-1 --source yfinance-go --pk XNAS.AAPL
+```
+
+## 🎯 What Problem Does This Solve?
+
+**Trading systems need reliable, auditable messaging** but teams often end up with:
+- **Schema drift** between services using different message formats
+- **Inconsistent delivery semantics** (ordering, retries, dead letter queues)
+- **Poor replayability** for research, backtesting, and compliance audits
+- **Transport lock-in** (Kafka vs NATS) preventing system evolution
+- **Scattered observability** with different metrics/logging per service
+
+**ampy-bus solves this** by providing:
+- ✅ **Transport-agnostic contracts** - same code works on NATS or Kafka
+- ✅ **Standardized envelopes** with required headers for lineage and observability  
+- ✅ **Domain-specific ordering** and partitioning strategies
+- ✅ **Built-in DLQ, replay, and retry** semantics
+- ✅ **Consistent observability** with metrics, tracing, and structured logging
+
+## 📦 Installation
+
+### Prerequisites
+- **Go 1.23+** (for CLI tools and Go libraries)
+- **Python 3.8+** (for Python libraries and examples)
+- **NATS Server** or **Kafka/Redpanda** (messaging broker)
+
+### Go Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/AmpyFin/ampy-bus.git
+cd ampy-bus
+
+# Build CLI tools
+make build
+
+# This creates:
+# - ./ampybusctl (NATS CLI)
+# - ./kafkabusctl (Kafka CLI) 
+# - ./kafkainspect (Kafka inspection)
+# - ./kafkapoison (DLQ testing)
+```
+
+### Python Installation
+
+```bash
+# Install core package
+pip install -e .
+
+# Install with NATS support (includes nats-py, OpenTelemetry, etc.)
+pip install -e .[nats]
+
+# Install development dependencies
+pip install -e .[dev]
+```
+
+### Docker Setup (Optional)
+
+```bash
+# Start NATS server
+docker run -d --name nats -p 4222:4222 nats:latest
+
+# Start Redpanda (Kafka-compatible)
+docker run -d --name redpanda -p 9092:9092 -p 9644:9644 \
+  docker.redpanda.com/redpanda/redpanda:latest \
+  redpanda start --overprovisioned --smp 1 --memory 1G
+```
+
+## 🛠️ CLI Tools
+
+### ampybusctl (NATS)
+
+Main CLI for NATS-based messaging operations:
+
+```bash
+# Publish empty message (for testing)
+./ampybusctl pub-empty --topic ampy.prod.bars.v1.XNAS.AAPL \
+  --producer yfinance-go@ingest-1 --source yfinance-go --pk XNAS.AAPL
+
+# Subscribe to messages
+./ampybusctl sub --subject "ampy.prod.bars.v1.>"
+
+# Subscribe with durable consumer
+./ampybusctl sub --subject "ampy.prod.bars.v1.>" --durable my-consumer
+
+# DLQ operations
+./ampybusctl dlq-inspect --subject "ampy.prod.dlq.v1.>" --max 10 --decode
+./ampybusctl dlq-redrive --subject "ampy.prod.dlq.v1.>" --max 5
+
+# Performance testing
+./ampybusctl bench-pub --topic ampy.prod.bars.v1.XNAS.AAPL \
+  --producer bench@test --source bench --pk XNAS.AAPL --count 1000
+
+# Replay messages
+./ampybusctl replay --env prod --domain bars --version v1 --subtopic XNAS.AAPL \
+  --start 2025-01-01T00:00:00Z --end 2025-01-01T01:00:00Z --reason "backtest"
+
+# Validate fixtures
+./ampybusctl validate-fixture --file examples/bars_v1_XNAS_AAPL.json
+```
+
+### kafkabusctl (Kafka)
+
+Kafka-specific operations:
+
+```bash
+# Create topic
+./kafkabusctl ensure-topic --brokers 127.0.0.1:9092 \
+  --topic ampy.prod.bars.v1.XNAS.AAPL --partitions 3
+
+# Publish message
+./kafkabusctl pub-empty --brokers 127.0.0.1:9092 \
+  --topic ampy.prod.bars.v1.XNAS.AAPL \
+  --producer yfinance-go@ingest-1 --source yfinance-go --pk XNAS.AAPL
+
+# Subscribe to topic
+./kafkabusctl sub --brokers 127.0.0.1:9092 \
+  --topic ampy.prod.bars.v1.XNAS.AAPL --group cli-consumer
+```
+
+### kafkainspect
+
+Inspect Kafka topics and messages:
+
+```bash
+# List topics
+./kafkainspect list-topics --brokers 127.0.0.1:9092
+
+# Inspect topic details
+./kafkainspect describe-topic --brokers 127.0.0.1:9092 \
+  --topic ampy.prod.bars.v1.XNAS.AAPL
+
+# Consume and decode messages
+./kafkainspect consume --brokers 127.0.0.1:9092 \
+  --topic ampy.prod.bars.v1.XNAS.AAPL --max 10 --decode
+```
+
+### kafkapoison
+
+Generate poison messages for DLQ testing:
+
+```bash
+# Send poison message (will trigger DLQ)
+./kafkapoison --brokers 127.0.0.1:9092 \
+  --topic ampy.prod.bars.v1.XNAS.AAPL \
+  --producer poison@cli --source poison-test --pk XNAS.AAPL
+```
+
+## 📚 Examples & Features
+
+### Basic Pub/Sub
+
+**Go Example:**
+```go
+// examples/go/simple_roundtrip/main.go
+package main
+
+import (
+    "context"
+    "github.com/AmpyFin/ampy-bus/pkg/ampybus/natsbinding"
+)
+
+func main() {
+    // Connect to NATS
+    cfg := natsbinding.Config{URL: "nats://localhost:4222"}
+    bus, _ := natsbinding.Connect(cfg)
+    defer bus.Close()
+
+    // Publish message
+    headers := ampybus.NewHeaders("ampy.bars.v1.BarBatch", "test-producer", "test-source", "XNAS.AAPL")
+    bus.Publish(context.Background(), "ampy.prod.bars.v1.XNAS.AAPL", headers, []byte("payload"))
+
+    // Subscribe to messages
+    bus.Subscribe("ampy.prod.bars.v1.>", func(msg *ampybus.Message) {
+        fmt.Printf("Received: %s\n", msg.Headers.MessageID)
+    })
+}
+```
+
+**Python Example:**
+```python
+# python/examples/simple_roundtrip.py
+import asyncio
+from ampybus import nats_bus
+
+async def main():
+    # Connect to NATS
+    bus = nats_bus.NatsBus("nats://localhost:4222")
+    await bus.connect()
+
+    # Publish message
+    headers = {
+        "message_id": "018f5e2f-9b1c-76aa-8f7a-3b1d8f3ea0c2",
+        "schema_fqdn": "ampy.bars.v1.BarBatch",
+        "producer": "test-producer",
+        "source": "test-source",
+        "partition_key": "XNAS.AAPL"
+    }
+    await bus.publish("ampy.prod.bars.v1.XNAS.AAPL", headers, b"payload")
+
+    # Subscribe to messages
+    async def handler(msg):
+        print(f"Received: {msg.headers['message_id']}")
+    
+    await bus.subscribe("ampy.prod.bars.v1.>", handler)
+
+asyncio.run(main())
+```
+
+### Dead Letter Queue (DLQ) Handling
+
+```bash
+# Send a poison message (will fail to decode)
+./kafkapoison --brokers 127.0.0.1:9092 \
+  --topic ampy.prod.bars.v1.XNAS.AAPL \
+  --producer poison@test --source poison-test --pk XNAS.AAPL
+
+# Inspect DLQ messages
+./ampybusctl dlq-inspect --subject "ampy.prod.dlq.v1.>" --max 5 --decode --outdir ./dlq_dump
+
+# Redrive messages from DLQ (after fixing the issue)
+./ampybusctl dlq-redrive --subject "ampy.prod.dlq.v1.>" --max 5
+```
+
+### Message Replay
+
+```bash
+# Replay bars data for backtesting
+./ampybusctl replay --env prod --domain bars --version v1 --subtopic XNAS.AAPL \
+  --start 2025-01-01T09:30:00Z --end 2025-01-01T16:00:00Z \
+  --reason "backtest-2025-01-01"
+
+# Replay with custom subject pattern
+./ampybusctl replay --subject "ampy.prod.ticks.v1.trade.>" \
+  --start 2025-01-01T09:30:00Z --end 2025-01-01T10:00:00Z \
+  --reason "tick-analysis"
+```
+
+### Performance Testing
+
+```bash
+# Benchmark publishing performance
+./ampybusctl bench-pub --topic ampy.prod.bars.v1.XNAS.AAPL \
+  --producer bench@test --source bench --pk XNAS.AAPL --count 10000
+
+# Output: Published 10000 messages in 2.3s (4347.8 msg/s)
+```
+
+### Topic Patterns & Domains
+
+```bash
+# Market data topics
+ampy.prod.bars.v1.XNAS.AAPL      # OHLCV bars
+ampy.prod.ticks.v1.trade.MSFT    # Trade ticks
+ampy.prod.ticks.v1.quote.AAPL    # Quote ticks
+
+# News & signals
+ampy.prod.news.v1.raw            # Raw news items
+ampy.prod.signals.v1.hyper@2025-01-01  # ML signals
+
+# Trading operations
+ampy.prod.orders.v1.requests     # Order requests
+ampy.prod.fills.v1.events        # Fill events
+ampy.prod.positions.v1.snapshots # Position snapshots
+
+# System monitoring
+ampy.prod.metrics.v1.ampy-oms    # Service metrics
+ampy.prod.dlq.v1.bars            # Dead letter queue
+```
+
+### Connection Options
+
+```bash
+# NATS with authentication
+./ampybusctl sub --subject "ampy.prod.bars.v1.>" \
+  --nats nats://localhost:4222 \
+  --user myuser --pass mypass
+
+# NATS with TLS
+./ampybusctl sub --subject "ampy.prod.bars.v1.>" \
+  --nats tls://localhost:4222 \
+  --tls-ca ca.pem --tls-cert client-cert.pem --tls-key client-key.pem
+
+# Kafka with SASL
+./kafkabusctl sub --brokers 127.0.0.1:9092 \
+  --topic ampy.prod.bars.v1.XNAS.AAPL \
+  --group my-consumer
+```
+
+### Python Integration
+
+```python
+# Install with NATS support
+pip install -e .[nats]
+
+# Use in your application
+from ampybus import nats_bus, envelope
+
+# Create properly formatted envelope
+env = envelope.Envelope(
+    message_id="018f5e2f-9b1c-76aa-8f7a-3b1d8f3ea0c2",
+    schema_fqdn="ampy.bars.v1.BarBatch",
+    producer="my-service@host-1",
+    source="my-service",
+    partition_key="XNAS.AAPL"
+)
+
+# Connect and publish
+bus = nats_bus.NatsBus("nats://localhost:4222")
+await bus.connect()
+await bus.publish("ampy.prod.bars.v1.XNAS.AAPL", env.headers, protobuf_data)
+```
+
+## 🚀 Quick Start Guide
+
+### 1. Start a Message Broker
+
+**Option A: NATS (Recommended for development)**
+```bash
+docker run -d --name nats -p 4222:4222 nats:latest
+```
+
+**Option B: Kafka/Redpanda**
+```bash
+docker run -d --name redpanda -p 9092:9092 -p 9644:9644 \
+  docker.redpanda.com/redpanda/redpanda:latest \
+  redpanda start --overprovisioned --smp 1 --memory 1G
+```
+
+### 2. Build and Test CLI Tools
+
+```bash
+# Build all CLI tools
+make build
+
+# Test basic pub/sub (NATS)
+./ampybusctl pub-empty --topic ampy.prod.bars.v1.XNAS.AAPL \
+  --producer test@cli --source test --pk XNAS.AAPL
+
+# In another terminal, subscribe
+./ampybusctl sub --subject "ampy.prod.bars.v1.>"
+```
+
+### 3. Try Python Integration
+
+```bash
+# Install Python package
+pip install -e .[nats]
+
+# Run Python example
+python python/examples/simple_roundtrip.py
+```
+
+## 🎯 Common Use Cases
+
+### Market Data Ingestion
+
+```bash
+# Ingest bars data
+./ampybusctl pub-empty --topic ampy.prod.bars.v1.XNAS.AAPL \
+  --producer yfinance-go@ingest-1 --source yfinance-go --pk XNAS.AAPL
+
+# Ingest tick data  
+./ampybusctl pub-empty --topic ampy.prod.ticks.v1.trade.MSFT \
+  --producer databento-cpp@tick-1 --source databento-cpp --pk MSFT.XNAS
+```
+
+### Trading System Integration
+
+```bash
+# Publish trading signals
+./ampybusctl pub-empty --topic ampy.prod.signals.v1.hyper@2025-01-01 \
+  --producer ampy-model@mdl-1 --source ampy-model --pk hyper@2025-01-01|NVDA.XNAS
+
+# Publish order requests
+./ampybusctl pub-empty --topic ampy.prod.orders.v1.requests \
+  --producer ampy-oms@oms-1 --source ampy-oms --pk co_20250101_001
+```
+
+### Monitoring & Observability
+
+```bash
+# Monitor DLQ for issues
+./ampybusctl dlq-inspect --subject "ampy.prod.dlq.v1.>" --max 10
+
+# Check system metrics
+./ampybusctl sub --subject "ampy.prod.metrics.v1.>"
+```
+
+### Backtesting & Research
+
+```bash
+# Replay historical data for backtesting
+./ampybusctl replay --env prod --domain bars --version v1 --subtopic XNAS.AAPL \
+  --start 2025-01-01T09:30:00Z --end 2025-01-01T16:00:00Z \
+  --reason "backtest-2025-01-01"
+
+# Replay specific time window
+./ampybusctl replay --subject "ampy.prod.ticks.v1.trade.>" \
+  --start 2025-01-01T09:30:00Z --end 2025-01-01T10:00:00Z \
+  --reason "tick-analysis"
+```
+
+### Development & Testing
+
+```bash
+# Performance testing
+./ampybusctl bench-pub --topic ampy.prod.bars.v1.XNAS.AAPL \
+  --producer bench@test --source bench --pk XNAS.AAPL --count 1000
+
+# Test DLQ handling
+./kafkapoison --brokers 127.0.0.1:9092 \
+  --topic ampy.prod.bars.v1.XNAS.AAPL \
+  --producer poison@test --source poison-test --pk XNAS.AAPL
+
+# Validate message fixtures
+./ampybusctl validate-fixture --file examples/bars_v1_XNAS_AAPL.json
+```
+
+## 📖 Documentation
+
+The sections above provide a practical introduction to using ampy-bus. For complete technical details, see:
+
+- **[Problem Statement & Design Principles](#1-problem-statement)** - Why ampy-bus exists and core design principles
+- **[Topic Taxonomy](#5-topic-taxonomy--namespacing)** - Standardized topic naming conventions
+- **[Envelope & Headers](#6-envelope--headers-contract)** - Required and optional message headers
+- **[Delivery Semantics](#7-delivery-semantics-ordering--keys-by-domain)** - Ordering guarantees by domain
+- **[Error Handling & DLQ](#8-error-handling-retries-backpressure-dlq)** - Retry, backpressure, and dead letter queue behavior
+- **[Replay & Backfill](#10-replay--backfill)** - Historical data replay capabilities
+- **[Observability](#11-observability-metrics-logs-traces)** - Metrics, logging, and tracing standards
+- **[Security & Compliance](#12-security--compliance)** - Security requirements and auditability
+- **[Performance Targets](#13-performance-targets-slos)** - Latency and throughput SLOs
+- **[Domain Examples](#14-domain-specific-envelope-examples)** - Complete envelope examples for each domain
+
+## 🤝 Contributing
+
+- Open an issue describing changes to topics/headers/QoS before sending PRs
+- Include **golden envelopes** and **tests** for any new domain
+- Follow semantic versioning for header changes (additive only)
+
+## 📄 License
+
+Apache-2.0 (patent-grant, enterprise-friendly)
 
 ---
 
@@ -557,19 +1010,6 @@ Those are **producers** (e.g., FX Go client, Marketbeat Go) that emit domain pay
 **Topics:** `trading-systems`, `messaging`, `protobuf`, `nats`, `kafka`, `event-driven`, `fintech`, `observability`, `slo`, `open-source`, `ampyfin`
 
 ---
-
-## 26) Implementation Checklist (for the LLM)
-
-- [ ] Define header constants and envelope struct (Go & Python).  
-- [ ] Encode/decode helpers for Protobuf bytes + gzip.  
-- [ ] Validation: required headers present; types; UUIDv7 format; size thresholds.  
-- [ ] Key selection helpers per domain.  
-- [ ] NATS binding: publish/subscribe, JetStream config hints, tracing propagation.  
-- [ ] Kafka binding: topic/key mapping, headers, consumer group offsets.  
-- [ ] DLQ router + reasons; replay control publisher.  
-- [ ] Metrics/logging/tracing hooks (prometheus + OpenTelemetry).  
-- [ ] Golden envelopes + unit tests + fault injection tests.  
-- [ ] Load generator & SLO verification scripts.  
 
 ---
 

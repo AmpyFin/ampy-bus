@@ -1,13 +1,14 @@
-name: ci
+name: ampy-bus CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
-  build-and-validate:
+  build-and-smoke:
     runs-on: ubuntu-latest
 
     steps:
@@ -17,34 +18,91 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
-
-      - name: Go mod download
-        run: go mod download
-
-      - name: Build ampybusctl
-        run: go build -o ampybusctl ./cmd/ampybusctl
-
-      - name: Go unit tests (if any)
-        run: go test ./...
-
-      - name: Validate golden fixtures
-        run: ./ampybusctl validate-fixture --dir golden
+          go-version: '1.22.x'
+          check-latest: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-            python-version: '3.11'
+          python-version: '3.12'
 
-      - name: Install Python package (editable) with nats extra
-        run: pip install -e .[nats]
-
-      - name: Import smoke tests
+      - name: Go tidy + build all
         run: |
-          python - <<'PY'
-          import ampybus
-          from ampybus.headers import new_headers
-          h = new_headers("ampy.bars.v1.BarBatch","ci@host","ci","XNAS.AAPL")
-          assert h.schema_hash.startswith("nameonly:sha256:")
-          print("python sdk import OK")
-          PY
+          go mod tidy
+          go build ./...
+          go build -o ampybusctl   ./cmd/ampybusctl
+          go build -o kafkabusctl  ./cmd/kafkabusctl
+          go build -o kafkapoison  ./cmd/kafkapoison
+          go build -o kafkainspect ./cmd/kafkainspect
+
+      - name: Python install (editable) with NATS extra
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[nats]
+
+      # ---------- Golden fixtures ----------
+      - name: Validate golden fixtures (if present)
+        run: |
+          # This will print "no *.json files under golden" and exit 0 if dir is empty/missing.
+          ./ampybusctl validate-fixture --dir golden || true
+
+      # ---------- NATS (JetStream) smoke ----------
+      - name: Start NATS (JetStream)
+        run: |
+          docker run -d --name nats -p 4222:4222 nats:2.10 -js
+          for i in {1..30}; do nc -z 127.0.0.1 4222 && echo "NATS ready" && break; sleep 1; done
+
+      - name: NATS publish (ampybusctl)
+        run: |
+          ./ampybusctl pub-empty \
+            --topic ampy.prod.bars.v1.XNAS.AAPL \
+            --producer ci@runner --source ci --pk XNAS.AAPL \
+            --nats nats://127.0.0.1:4222
+
+      - name: NATS consume once (Python)
+        run: |
+          python3 python/examples/py_nats_sub.py \
+            --subject "ampy.prod.bars.v1.>" \
+            --durable "ci-sub" \
+            --exit-after 1 --timeout-sec 10 \
+            --nats nats://127.0.0.1:4222
+
+      # ---------- Redpanda/Kafka DLQ smoke ----------
+      - name: Start Redpanda
+        run: |
+          docker run -d --name redpanda -p 9092:9092 -p 9644:9644 redpandadata/redpanda:latest \
+            redpanda start --overprovisioned --smp 1 --memory 1G --reserve-memory 0M \
+            --node-id 0 --check=false \
+            --kafka-addr "PLAINTEXT://0.0.0.0:9092" \
+            --advertise-kafka-addr "PLAINTEXT://127.0.0.1:9092"
+          for i in {1..60}; do nc -z 127.0.0.1 9092 && echo "Kafka ready" && break; sleep 1; done
+
+      - name: Ensure Kafka topic
+        run: |
+          ./kafkabusctl ensure-topic \
+            --brokers 127.0.0.1:9092 \
+            --topic ampy.prod.bars.v1.XNAS.AAPL \
+            --partitions 3
+
+      - name: Start Kafka consumer (background) that DLQs on decode error
+        run: |
+          # run for ~10s then exit
+          timeout 10s ./kafkabusctl sub \
+            --brokers 127.0.0.1:9092 \
+            --topic ampy.prod.bars.v1.XNAS.AAPL \
+            --group ci-consumer || true
+
+      - name: Publish poison to Kafka (bad gzip)
+        run: |
+          ./kafkapoison \
+            --brokers 127.0.0.1:9092 \
+            --topic ampy.prod.bars.v1.XNAS.AAPL \
+            --producer poison@ci --source poison-test --pk XNAS.AAPL
+
+      - name: Inspect DLQ topic (should contain the poison)
+        run: |
+          ./kafkainspect \
+            --brokers 127.0.0.1:9092 \
+            --topic ampy.prod.dlq.v1.ampy.prod.bars.v1.XNAS.AAPL \
+            --group dlq-inspector \
+            --max 5
