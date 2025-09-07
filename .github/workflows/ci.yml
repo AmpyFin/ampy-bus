@@ -111,7 +111,31 @@ jobs:
             --node-id 0 --check=false \
             --kafka-addr "PLAINTEXT://0.0.0.0:9092" \
             --advertise-kafka-addr "PLAINTEXT://127.0.0.1:9092"
-          for i in {1..60}; do (echo > /dev/tcp/127.0.0.1/9092) >/dev/null 2>&1 && echo "Kafka ready" && break; sleep 1; done
+          
+      - name: Wait for Redpanda
+        run: |
+          python3 -c "
+          import socket
+          import time
+          import sys
+          print('Waiting for Redpanda to be ready...')
+          for i in range(60):
+              try:
+                  sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                  sock.settimeout(1)
+                  result = sock.connect_ex(('127.0.0.1', 9092))
+                  sock.close()
+                  if result == 0:
+                      print('Redpanda port is open, waiting for full readiness...')
+                      time.sleep(5)
+                      print('Redpanda is ready')
+                      sys.exit(0)
+              except Exception as e:
+                  print(f'Connection attempt {i+1} failed: {e}')
+              time.sleep(1)
+          print('Redpanda failed to start within 60 seconds')
+          sys.exit(1)
+          "
 
       - name: Ensure Kafka topic
         run: |
