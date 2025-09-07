@@ -72,7 +72,8 @@ func ensureTopic(args []string) {
 	}
 	cfg := kafkabinding.Config{Brokers: strings.Split(*brokers, ",")}
 	bus := kafkabinding.New(cfg)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer bus.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := bus.EnsureTopic(ctx, *topic, *partitions); err != nil {
 		fmt.Fprintf(os.Stderr, "ensure topic: %v\n", err)
@@ -102,9 +103,10 @@ func pubEmpty(args []string) {
 
 	cfg := kafkabinding.Config{Brokers: strings.Split(*brokers, ",")}
 	bus := kafkabinding.New(cfg)
+	defer bus.Close()
 
 	// ensure topic exists
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := bus.EnsureTopic(ctx, *topic, 3); err != nil {
 		fmt.Fprintf(os.Stderr, "ensure topic: %v\n", err)

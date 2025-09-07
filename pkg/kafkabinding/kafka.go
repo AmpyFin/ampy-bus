@@ -57,32 +57,43 @@ func (b *Bus) EnsureTopic(ctx context.Context, topic string, partitions int) err
 	if partitions <= 0 {
 		partitions = 3
 	}
-	// Use a control connection to the first broker.
-	conn, err := kafka.DialContext(ctx, "tcp", b.cfg.Brokers[0])
-	if err != nil {
-		return fmt.Errorf("dial broker: %w", err)
-	}
-	defer conn.Close()
-
-	// Check if topic exists; if not, create.
-	part, err := conn.ReadPartitions()
-	if err == nil {
-		for _, p := range part {
-			if p.Topic == topic {
-				return nil // already exists
+	
+	// Try each broker until one works
+	var lastErr error
+	for _, broker := range b.cfg.Brokers {
+		conn, err := kafka.DialContext(ctx, "tcp", broker)
+		if err != nil {
+			lastErr = fmt.Errorf("dial broker %s: %w", broker, err)
+			continue
+		}
+		
+		// Check if topic exists; if not, create.
+		part, err := conn.ReadPartitions()
+		if err == nil {
+			for _, p := range part {
+				if p.Topic == topic {
+					conn.Close()
+					return nil // already exists
+				}
 			}
 		}
+		
+		// Create with RF=1 for local dev; adjust in real clusters.
+		err = conn.CreateTopics(kafka.TopicConfig{
+			Topic:             topic,
+			NumPartitions:     partitions,
+			ReplicationFactor: 1,
+		})
+		conn.Close()
+		
+		if err != nil && !strings.Contains(strings.ToLower(err.Error()), "topic with this name already exists") {
+			lastErr = fmt.Errorf("create topic %s on broker %s: %w", topic, broker, err)
+			continue
+		}
+		return nil // success
 	}
-	// Create with RF=1 for local dev; adjust in real clusters.
-	err = conn.CreateTopics(kafka.TopicConfig{
-		Topic:             topic,
-		NumPartitions:     partitions,
-		ReplicationFactor: 1,
-	})
-	if err != nil && !strings.Contains(strings.ToLower(err.Error()), "topic with this name already exists") {
-		return fmt.Errorf("create topic %s: %w", topic, err)
-	}
-	return nil
+	
+	return fmt.Errorf("failed to ensure topic %s on any broker: %w", topic, lastErr)
 }
 
 func (b *Bus) PublishEnvelope(ctx context.Context, env ampybus.Envelope, extra map[string]string) error {
