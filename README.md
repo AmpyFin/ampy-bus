@@ -8,7 +8,6 @@
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/downloads/)
 [![Go 1.23+](https://img.shields.io/badge/go-1.23+-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://golang.org/)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue?style=for-the-badge&logo=apache&logoColor=white)](https://opensource.org/licenses/Apache-2.0)
-[![GitHub release](https://img.shields.io/github/v/release/AmpyFin/ampy-bus?style=for-the-badge&logo=github&logoColor=white)](https://github.com/AmpyFin/ampy-bus/releases)
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen?style=for-the-badge&logo=github-actions&logoColor=white)](#)
 [![Test Coverage](https://img.shields.io/badge/coverage-85%25-brightgreen?style=for-the-badge&logo=codecov&logoColor=white)](#)
