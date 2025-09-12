@@ -1,6 +1,6 @@
 [project]
 name = "ampy-bus"          # <— was "ampybus"
-version = "1.0.7"
+version = "1.1.0"
 description = "Transport-agnostic messaging conventions & helpers for AmpyFin"
 readme = "README.md"
 requires-python = ">=3.8"

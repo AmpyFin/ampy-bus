@@ -26,6 +26,22 @@
 
 [📖 Documentation](#-documentation) • [🚀 Quick Start](#-quick-start) • [💡 Examples](#-complete-examples--use-cases) • [🤝 Contributing](#-contributing)
 
+## 🚨 Quick Reference - Common Gotchas
+
+> **New to ampy-bus?** Read this first to avoid the most common issues!
+
+| Issue | ❌ Wrong | ✅ Correct |
+|-------|----------|------------|
+| **NATS Subjects** | `ampy.dev_bars_v1_XNAS_AAPL` | `ampy.dev.bars.v1.XNAS.AAPL` |
+| **Envelope Topic** | Missing `Topic` field | `Topic: "ampy.dev.bars.v1.XNAS.AAPL"` |
+| **JetStream** | `nats-server` (no `-js`) | `nats-server -js` |
+| **Error Handling** | Ignore `PublishEnvelope` errors | Always check `err` return value |
+
+**Most Common Errors:**
+- `nats: invalid subject` → Use dots, not underscores
+- `nats: no response from stream` → Set `Topic` field in envelope
+- `context deadline exceeded` → Start NATS with `-js` flag
+
 </div>
 
 
@@ -106,13 +122,18 @@ pip install -e .[nats]
 
 ### 3️⃣ **Test Basic Pub/Sub**
 
+> **⚠️ IMPORTANT**: Use dots (.) in topics, not underscores (_). This is critical for NATS JetStream to work properly.
+
 ```bash
-# Publish a message (NATS)
+# ✅ Publish a message (NATS) - CORRECT format with dots
 ./ampybusctl pub-empty --topic ampy.prod.bars.v1.XNAS.AAPL \
   --producer yfinance-go@ingest-1 --source yfinance-go --pk XNAS.AAPL
 
-# Subscribe to messages
+# ✅ Subscribe to messages - CORRECT format with dots
 ./ampybusctl sub --subject "ampy.prod.bars.v1.>"
+
+# ❌ WRONG - Don't use underscores like this:
+# ./ampybusctl pub-empty --topic ampy.prod_bars_v1_XNAS_AAPL
 
 # Kafka alternative
 ./kafkabusctl pub-empty --brokers 127.0.0.1:9092 \
@@ -120,11 +141,89 @@ pip install -e .[nats]
   --producer yfinance-go@ingest-1 --source yfinance-go --pk XNAS.AAPL
 ```
 
+**Validation Steps:**
+1. **Check NATS is running with JetStream:**
+   ```bash
+   docker logs nats | grep "Starting JetStream"
+   ```
+
+2. **Verify your topic format:**
+   ```bash
+   # ✅ Good: ampy.prod.bars.v1.XNAS.AAPL
+   # ❌ Bad:  ampy.prod_bars_v1_XNAS_AAPL
+   ```
+
+3. **Test the connection:**
+   ```bash
+   # This should work without errors
+   ./ampybusctl pub-empty --topic test.message --producer test@cli --source test --pk test
+   ```
+
 ### 4️⃣ **Try Python Integration**
 
 ```bash
 # Run Python example
 python python/examples/simple_roundtrip.py
+```
+
+## ⚠️ CRITICAL: Common Configuration Gotchas
+
+> **🚨 IMPORTANT**: These configuration issues cause the most problems for new users. Read this section carefully before starting!
+
+### NATS Subject Patterns - Use Dots, Not Underscores!
+
+**❌ WRONG - This will fail:**
+```bash
+# Using underscores in subjects
+./ampybusctl pub-empty --topic ampy.dev_bars_v1_XNAS_AAPL
+```
+
+**✅ CORRECT - This works:**
+```bash
+# Using dots in subjects (required for NATS JetStream wildcards)
+./ampybusctl pub-empty --topic ampy.dev.bars.v1.XNAS.AAPL
+```
+
+**Why?** NATS JetStream wildcards (`>`) work with dots but not underscores. The library requires dots for proper subject matching.
+
+### Envelope Topic Field - Must Be Set!
+
+**❌ WRONG - This will fail:**
+```go
+envelope := ampybus.Envelope{
+    // Topic field missing - this causes "no response from stream" errors
+    Headers: ampybus.Headers{...},
+    Payload: data,
+}
+```
+
+**✅ CORRECT - This works:**
+```go
+envelope := ampybus.Envelope{
+    Topic: "ampy.dev.bars.v1.XNAS.AAPL",  // CRITICAL: Must be set!
+    Headers: ampybus.Headers{...},
+    Payload: data,
+}
+```
+
+### Consumer Name Limitations
+
+Consumer names cannot contain dots, but the library handles this automatically:
+```go
+// Library automatically converts:
+// "ampy.bars.v1.Bar" -> "ampy_bars_v1_Bar" for consumer names
+```
+
+### Stream Configuration Must Match
+
+Your stream subjects pattern must match your publish subjects exactly:
+```go
+config := natsbinding.Config{
+    URLs:          []string{"nats://localhost:4222"},
+    StreamName:    "AMPY_TRADING",
+    Subjects:      []string{"ampy.dev.>"},   // Must use dots for wildcard
+    DurablePrefix: "ampy-trading",           // Consumer prefix
+}
 ```
 
 ## ⚠️ CRITICAL: NATS JetStream Requirement
@@ -195,6 +294,331 @@ nats server info
 nats stream list
 ```
 
+## 🆘 Troubleshooting Common Issues
+
+### Error: `nats: invalid subject`
+
+**Problem:** Using underscores instead of dots in NATS subjects.
+
+**Solution:**
+```bash
+# ❌ Wrong - uses underscores
+./ampybusctl pub-empty --topic ampy.dev_bars_v1_XNAS_AAPL
+
+# ✅ Correct - uses dots
+./ampybusctl pub-empty --topic ampy.dev.bars.v1.XNAS.AAPL
+```
+
+### Error: `nats: invalid consumer name`
+
+**Problem:** Consumer names cannot contain dots.
+
+**Solution:** The library handles this automatically, but if you see this error, check your configuration:
+```go
+// ✅ Library automatically converts dots to underscores in consumer names
+// "ampy.bars.v1.Bar" -> "ampy_bars_v1_Bar"
+```
+
+### Error: `nats: subject does not match consumer`
+
+**Problem:** Stream subjects pattern doesn't match your publish subjects.
+
+**Solution:**
+```go
+// ✅ Ensure your stream pattern matches your publish subjects
+config := natsbinding.Config{
+    Subjects: []string{"ampy.dev.>"},  // This matches ampy.dev.bars.v1.XNAS.AAPL
+}
+```
+
+### Error: `nats: no response from stream`
+
+**Problem:** Missing `Topic` field in envelope.
+
+**Solution:**
+```go
+// ❌ Wrong - Topic field missing
+envelope := ampybus.Envelope{
+    Headers: ampybus.Headers{...},
+    Payload: data,
+}
+
+// ✅ Correct - Topic field set
+envelope := ampybus.Envelope{
+    Topic: "ampy.dev.bars.v1.XNAS.AAPL",  // CRITICAL!
+    Headers: ampybus.Headers{...},
+    Payload: data,
+}
+```
+
+### Error: `nats: no responders available for request`
+
+**Problem:** You're using request-reply pattern instead of simple publishing.
+
+**Solution:** Use `PublishEnvelope` for simple publishing:
+```go
+// ✅ Use PublishEnvelope for simple publishing
+_, err = bus.PublishEnvelope(context.Background(), envelope, map[string]string{})
+```
+
+### Error: `context deadline exceeded`
+
+**Problem:** NATS server is not running or not accessible.
+
+**Solution:**
+```bash
+# Start NATS with JetStream
+docker run --rm -d --name nats -p 4222:4222 nats:2.10 -js
+
+# Verify it's running
+docker logs nats | grep "Starting JetStream"
+```
+
+### Error: `nats: stream not found`
+
+**Problem:** Stream doesn't exist or wasn't created properly.
+
+**Solution:** The library should create streams automatically, but you can verify:
+```bash
+# List streams
+nats stream list
+
+# Create stream manually if needed
+nats stream add AMPY_TRADING --subjects "ampy.dev.>"
+```
+
+### Debug Mode
+
+Enable debug logging to troubleshoot issues:
+
+```go
+// Add debug logging to your handlers
+func handleMessage(data []byte) error {
+    log.Printf("🔍 DEBUG: Received message: %d bytes", len(data))
+    // ... process message
+    return nil
+}
+
+// Enable debug logging in configuration
+config := natsbinding.Config{
+    URLs:          []string{"nats://localhost:4222"},
+    StreamName:    "AMPY_TRADING",
+    Subjects:      []string{"ampy.dev.>"},
+    DurablePrefix: "ampy-trading",
+    // Add debug options if available in your version
+}
+```
+
+### Quick Validation Test
+
+Run this test to verify everything is working:
+
+```bash
+go run - << 'EOF'
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+    "time"
+    
+    "github.com/AmpyFin/ampy-bus/pkg/ampybus"
+    "github.com/AmpyFin/ampy-bus/pkg/ampybus/natsbinding"
+)
+
+func main() {
+    config := natsbinding.Config{
+        URLs:          []string{"nats://localhost:4222"},
+        StreamName:    "TEST_STREAM",
+        Subjects:      []string{"test.>"},
+        DurablePrefix: "test-consumer",
+    }
+    
+    bus, err := natsbinding.NewBus(config)
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer bus.Close()
+    
+    envelope := ampybus.Envelope{
+        Topic: "test.message",  // CRITICAL: Set Topic field
+        Headers: ampybus.Headers{
+            MessageID:  "test-123",
+            SchemaFQDN: "test.Message",
+            ProducedAt: time.Now(),
+        },
+        Payload: []byte("test data"),
+    }
+    
+    _, err = bus.PublishEnvelope(context.Background(), envelope, map[string]string{})
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    fmt.Println("✅ ampy-bus working correctly!")
+}
+EOF
+```
+
+## 🎯 Best Practices & Common Pitfalls
+
+### ✅ Do's
+
+1. **Always set the Topic field in envelopes**
+   ```go
+   envelope := ampybus.Envelope{
+       Topic: "ampy.dev.bars.v1.XNAS.AAPL",  // CRITICAL!
+       Headers: ampybus.Headers{...},
+       Payload: data,
+   }
+   ```
+
+2. **Use dots in NATS subjects, not underscores**
+   ```bash
+   # ✅ Correct
+   ./ampybusctl pub-empty --topic ampy.dev.bars.v1.XNAS.AAPL
+   
+   # ❌ Wrong
+   ./ampybusctl pub-empty --topic ampy.dev_bars_v1_XNAS_AAPL
+   ```
+
+3. **Handle errors from PublishEnvelope**
+   ```go
+   _, err = bus.PublishEnvelope(context.Background(), envelope, map[string]string{})
+   if err != nil {
+       log.Printf("Failed to publish: %v", err)
+       return err
+   }
+   ```
+
+4. **Use pull subscriptions for reliability**
+   ```go
+   // ✅ Recommended for production
+   return bus.Subscribe(subject, schemaFQDN, func(data []byte) error {
+       // Process message
+       return nil
+   })
+   ```
+
+5. **Set appropriate DurablePrefix for consumers**
+   ```go
+   config := natsbinding.Config{
+       DurablePrefix: "ampy-trading",  // Meaningful prefix
+   }
+   ```
+
+6. **Use PartitionKey for message ordering**
+   ```go
+   headers := ampybus.Headers{
+       PartitionKey: "XNAS.AAPL",  // Ensures ordering per symbol
+   }
+   ```
+
+### ❌ Don'ts
+
+1. **Don't forget to set Topic field**
+   ```go
+   // ❌ This will fail with "no response from stream"
+   envelope := ampybus.Envelope{
+       Headers: ampybus.Headers{...},
+       Payload: data,
+   }
+   ```
+
+2. **Don't use underscores in subjects**
+   ```bash
+   # ❌ This will fail with "invalid subject"
+   ./ampybusctl pub-empty --topic ampy.dev_bars_v1_XNAS_AAPL
+   ```
+
+3. **Don't ignore errors**
+   ```go
+   // ❌ Don't ignore errors
+   bus.PublishEnvelope(context.Background(), envelope, map[string]string{})
+   
+   // ✅ Always handle errors
+   _, err := bus.PublishEnvelope(context.Background(), envelope, map[string]string{})
+   if err != nil {
+       return err
+   }
+   ```
+
+4. **Don't use request-reply for simple publishing**
+   ```go
+   // ❌ Don't use request-reply for simple publishing
+   // This will fail with "no responders available"
+   
+   // ✅ Use PublishEnvelope for simple publishing
+   _, err = bus.PublishEnvelope(context.Background(), envelope, map[string]string{})
+   ```
+
+5. **Don't forget to close the bus**
+   ```go
+   // ✅ Always close the bus
+   defer bus.Close()
+   ```
+
+### 🔧 Configuration Validation
+
+Add validation to catch common mistakes early:
+
+```go
+func validateConfig(config natsbinding.Config) error {
+    // Check for underscores in subjects
+    for _, subject := range config.Subjects {
+        if strings.Contains(subject, "_") {
+            return fmt.Errorf("subjects must use dots, not underscores: %s", subject)
+        }
+    }
+    
+    // Check for empty stream name
+    if config.StreamName == "" {
+        return fmt.Errorf("stream name cannot be empty")
+    }
+    
+    // Check for empty durable prefix
+    if config.DurablePrefix == "" {
+        return fmt.Errorf("durable prefix cannot be empty")
+    }
+    
+    return nil
+}
+```
+
+### 🚀 Performance Tips
+
+1. **Use compression for large payloads**
+   ```go
+   headers := ampybus.Headers{
+       ContentEncoding: "gzip",  // For payloads > 128KB
+   }
+   ```
+
+2. **Batch messages when possible**
+   ```go
+   // Send multiple bars in a single batch
+   envelope := ampybus.Envelope{
+       Topic: "ampy.dev.bars.v1.XNAS.AAPL",
+       Headers: ampybus.Headers{
+           SchemaFQDN: "ampy.bars.v1.BarBatch",  // Batch schema
+       },
+       Payload: batchData,
+   }
+   ```
+
+3. **Use appropriate partition keys for ordering**
+   ```go
+   // For bars: use symbol + mic
+   PartitionKey: "XNAS.AAPL"
+   
+   // For orders: use client_order_id
+   PartitionKey: "co_20250101_001"
+   
+   // For fills: use account + order
+   PartitionKey: "ALPACA-LIVE-01|co_20250101_001"
+   ```
+
 ## 🎯 What Problem Does This Solve?
 
 **Trading systems need reliable, auditable messaging** but teams often end up with:
@@ -215,14 +639,14 @@ nats stream list
 
 | Component | Status | Version | Notes |
 |-----------|--------|---------|-------|
-| **Core Library** | ✅ Stable | v1.0.7 | Production ready |
-| **Go CLI Tools** | ✅ Stable | v1.0.7 | Full feature set |
-| **Python Package** | ✅ Stable | v1.0.7 | PyPI published |
-| **NATS Binding** | ✅ Stable | v1.0.7 | JetStream support |
-| **Kafka Binding** | ✅ Stable | v1.0.7 | Full compatibility |
-| **Documentation** | ✅ Complete | v1.0.7 | Comprehensive guides |
-| **Examples** | ✅ Complete | v1.0.7 | Go & Python samples |
-| **Tests** | ✅ Passing | v1.0.7 | 85% coverage |
+| **Core Library** | ✅ Stable | v1.1.0 | Production ready |
+| **Go CLI Tools** | ✅ Stable | v1.1.0 | Full feature set |
+| **Python Package** | ✅ Stable | v1.1.0 | PyPI published |
+| **NATS Binding** | ✅ Stable | v1.1.0 | JetStream support |
+| **Kafka Binding** | ✅ Stable | v1.1.0 | Full compatibility |
+| **Documentation** | ✅ Complete | v1.1.0 | Comprehensive guides |
+| **Examples** | ✅ Complete | v1.1.0 | Go & Python samples |
+| **Tests** | ✅ Passing | v1.1.0 | 85% coverage |
 
 ## 📦 Installation
 
@@ -428,24 +852,58 @@ package main
 import (
     "context"
     "fmt"
+    "log"
+    "time"
+    
     "github.com/AmpyFin/ampy-bus/pkg/ampybus"
     "github.com/AmpyFin/ampy-bus/pkg/ampybus/natsbinding"
 )
 
 func main() {
-    // Connect to NATS
-    cfg := natsbinding.Config{URL: "nats://localhost:4222"}
-    bus, _ := natsbinding.Connect(cfg)
+    // ⚠️ CRITICAL: Use dots in subjects, not underscores!
+    config := natsbinding.Config{
+        URLs:          []string{"nats://localhost:4222"},
+        StreamName:    "AMPY_TRADING",
+        Subjects:      []string{"ampy.dev.>"},  // Use dots for wildcards
+        DurablePrefix: "ampy-trading",
+    }
+    
+    // Create bus
+    bus, err := natsbinding.NewBus(config)
+    if err != nil {
+        log.Fatal(err)
+    }
     defer bus.Close()
 
-    // Publish message
-    headers := ampybus.NewHeaders("ampy.bars.v1.BarBatch", "test-producer", "test-source", "XNAS.AAPL")
-    bus.Publish(context.Background(), "ampy.prod.bars.v1.XNAS.AAPL", headers, []byte("payload"))
+    // ⚠️ CRITICAL: Always set Topic field in envelope!
+    envelope := ampybus.Envelope{
+        Topic: "ampy.dev.bars.v1.XNAS.AAPL",  // CRITICAL: Must be set!
+        Headers: ampybus.Headers{
+            MessageID:   "msg-123",
+            SchemaFQDN:  "ampy.bars.v1.Bar",
+            ProducedAt:  time.Now(),
+            RunID:       "run-456",
+            PartitionKey: "XNAS.AAPL",
+        },
+        Payload: []byte("your protobuf data here"),
+    }
+
+    // Publish with envelope
+    _, err = bus.PublishEnvelope(context.Background(), envelope, map[string]string{})
+    if err != nil {
+        log.Fatal(err)
+    }
 
     // Subscribe to messages
-    bus.Subscribe("ampy.prod.bars.v1.>", func(msg *ampybus.Message) {
-        fmt.Printf("Received: %s\n", msg.Headers.MessageID)
+    err = bus.Subscribe("ampy.dev.bars.v1.>", "ampy.bars.v1.Bar", func(data []byte) error {
+        fmt.Printf("Received message: %d bytes\n", len(data))
+        return nil
     })
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    fmt.Println("✅ Message published and subscription set up successfully!")
 }
 ```
 
